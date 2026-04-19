@@ -1,94 +1,73 @@
-# NoxConfig.md
+# NoxConfig
 
-## Project
-- Name: landingpage-roaster
-- Key prefix: LPR
-- Type: web app
-- Status: prototype
-- Repo: https://github.com/patpatwithhat/landingpage-roaster
-- Production: https://landingpage-roaster.patpatwithhat.xyz
+```yaml
+version: 1
 
-## Goal
-Build a lightweight tool that roasts landing pages and gives useful feedback on:
-- clarity
-- CTA quality
-- trust signals
-- SEO basics
+project:
+  id: lpr
+  name: landingpage-roaster
+  repo_root: /home/openclaw/.openclaw/workspace/landingpage-roaster
+  key_prefix: LPR
+  production_url: https://landingpage-roaster.patpatwithhat.xyz
 
-The first milestone is a simple homepage flow:
-- user submits a URL
-- app analyzes the page
-- app returns a structured verdict with scores, problems, and fixes
+github:
+  repo: patpatwithhat/landingpage-roaster
+  default_branch: main
 
-## Product Direction
-Tone:
-- sharp
-- playful
-- useful
-- a little weird
-- never uselessly mean
+chat:
+  discord_channel: landingpage-roaster
+  telegram_tag: lpr
 
-Core promise:
-- savage but actionable landing page audits in seconds
+agents:
+  builder:
+    runtime: acp
+    agent: codex
+    session_name: lpr-builder-codex
+  reviewer:
+    runtime: acp
+    agent: codex
+    session_name: lpr-reviewer-codex
 
-## MVP Scope
-Include:
-- homepage URL input
-- simple fetch/analyze flow
-- clarity score
-- CTA score
-- trust score
-- SEO quick audit
-- suggested fixes
-- rewritten hero/CTA suggestions
+workflow:
+  review_required: true
+  close_issue_on_merge: true
+  auto_merge: false
 
-Do not include yet:
-- auth
-- billing
-- multi-page crawling
-- team accounts
-- saved reports
-- PDF export
-- deep SEO crawler
+preview:
+  enabled: true
+  provider: vercel
+  mode: production
 
-## Workflow
-Preferred build loop:
-1. keep scope small
-2. ship thin vertical slices
-3. verify UX quickly
-4. only then deepen analysis quality
+issue_creation:
+  default_labels: []
+  default_assignees: []
 
-## Agents
-### Builder
-- implements the smallest useful next slice
-- prefers simple code over abstractions too early
+communication:
+  style: caveman
 
-### Reviewer
-- checks correctness
-- checks UX clarity
-- checks that output is actually useful, not generic AI sludge
+integrations:
+  env_prefix: LPR
+  env_location: /home/openclaw/.openclaw/.env
+  reserved_keys:
+    - LPR_OPENAI_API_KEY
+    - LPR_SUPABASE_URL
+    - LPR_SUPABASE_PUBLISHABLE_KEY
+    - LPR_SUPABASE_SECRET_KEY
+    - LPR_UPSTASH_REDIS_REST_URL
+    - LPR_UPSTASH_REDIS_REST_TOKEN
 
-## Priorities
-Current order:
-1. real analyzer light
-2. deployable demo
-3. improve personality / brand
-4. optional auth / usage limits
-5. optional paid features
-
-## Integrations
-Central env skeleton keys for this project use the `LPR_` prefix in `~/.openclaw/.env`.
-
-Current reserved keys:
-- `LPR_OPENAI_API_KEY`
-- `LPR_SUPABASE_URL`
-- `LPR_SUPABASE_PUBLISHABLE_KEY`
-- `LPR_SUPABASE_SECRET_KEY`
-- `LPR_UPSTASH_REDIS_REST_URL`
-- `LPR_UPSTASH_REDIS_REST_TOKEN`
-
-## Guardrails
-- If this file is missing, Nox should do nothing except report that the project is not configured.
-- Prefer concrete progress over speculative architecture.
-- Avoid overengineering early.
-- Keep outputs easy to demo and easy to explain.
+product:
+  tone:
+    - sharp
+    - playful
+    - useful
+    - weird
+  goal: savage but actionable landing page audits in seconds
+  current_phase: prototype
+  priorities:
+    - real analyzer light
+    - deployable demo
+    - improve personality and brand
+    - optional auth and usage limits
+    - optional paid features
+```
