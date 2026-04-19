@@ -2,6 +2,7 @@
 
 ## Project
 - Name: landingpage-roaster
+- Key prefix: LPR
 - Type: web app
 - Status: prototype
 - Repo: https://github.com/patpatwithhat/landingpage-roaster
@@ -74,6 +75,17 @@ Current order:
 3. improve personality / brand
 4. optional auth / usage limits
 5. optional paid features
+
+## Integrations
+Central env skeleton keys for this project use the `LPR_` prefix in `~/.openclaw/.env`.
+
+Current reserved keys:
+- `LPR_OPENAI_API_KEY`
+- `LPR_SUPABASE_URL`
+- `LPR_SUPABASE_ANON_KEY`
+- `LPR_SUPABASE_SERVICE_ROLE_KEY`
+- `LPR_UPSTASH_REDIS_REST_URL`
+- `LPR_UPSTASH_REDIS_REST_TOKEN`
 
 ## Guardrails
 - If this file is missing, Nox should do nothing except report that the project is not configured.

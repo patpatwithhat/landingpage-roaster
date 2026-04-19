@@ -13,6 +13,11 @@ Savage but useful landing page feedback in seconds.
 - clarity / CTA / trust / SEO scoring
 - goblin-style verdict with practical fixes
 
+## Project identity
+- Prefix: `LPR`
+- Central secret location: `~/.openclaw/.env`
+- Reserved env keys for this project start with `LPR_`
+
 ## Local development
 
 ```bash
