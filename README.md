@@ -17,6 +17,7 @@ Savage but useful landing page feedback in seconds.
 - Prefix: `LPR`
 - Central secret location: `~/.openclaw/.env`
 - Reserved env keys for this project start with `LPR_`
+- Supabase uses the new key naming: `PUBLISHABLE` and `SECRET`
 
 ## Local development
 

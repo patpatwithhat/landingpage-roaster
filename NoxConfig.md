@@ -82,8 +82,8 @@ Central env skeleton keys for this project use the `LPR_` prefix in `~/.openclaw
 Current reserved keys:
 - `LPR_OPENAI_API_KEY`
 - `LPR_SUPABASE_URL`
-- `LPR_SUPABASE_ANON_KEY`
-- `LPR_SUPABASE_SERVICE_ROLE_KEY`
+- `LPR_SUPABASE_PUBLISHABLE_KEY`
+- `LPR_SUPABASE_SECRET_KEY`
 - `LPR_UPSTASH_REDIS_REST_URL`
 - `LPR_UPSTASH_REDIS_REST_TOKEN`
 
