@@ -5,6 +5,7 @@
 - Type: web app
 - Status: prototype
 - Repo: https://github.com/patpatwithhat/landingpage-roaster
+- Production: https://landingpage-roaster.patpatwithhat.xyz
 
 ## Goal
 Build a lightweight tool that roasts landing pages and gives useful feedback on:
