@@ -1,49 +1,73 @@
-import { Pool } from "pg";
+import { createHash } from "node:crypto";
 
 import type { AuditResult } from "./schema";
 
-const REPORT_TABLE = "analysis_reports";
-let pool: Pool | null = null;
-let initPromise: Promise<void> | null = null;
+const REPORT_BUCKET = "landingpage-roaster-reports";
+let bucketEnsured = false;
 
-function getPool() {
-  const connectionString = process.env.POSTGRES_URL ?? process.env.POSTGRES_PRISMA_URL;
+function getSupabaseConfig() {
+  const url = process.env.LPR_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  const secret = process.env.LPR_SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SECRET_KEY;
 
-  if (!connectionString) {
+  if (!url || !secret) {
     return null;
   }
 
-  if (!pool) {
-    pool = new Pool({ connectionString });
-  }
-
-  return pool;
+  return { url, secret };
 }
 
-async function ensureTable() {
-  if (initPromise) return initPromise;
+function buildObjectPath(normalizedUrl: string, analysisVersion: string, contentHash: string) {
+  const urlHash = createHash("sha256").update(normalizedUrl).digest("hex");
+  return `${analysisVersion}/${urlHash}/${contentHash}.json`;
+}
 
-  const activePool = getPool();
-  if (!activePool) return;
+async function supabaseRequest(path: string, init?: RequestInit) {
+  const config = getSupabaseConfig();
+  if (!config) return null;
 
-  initPromise = activePool
-    .query(`
-      create table if not exists ${REPORT_TABLE} (
-        id bigserial primary key,
-        normalized_url text not null,
-        analysis_version text not null,
-        content_hash text not null,
-        report jsonb not null,
-        created_at timestamptz not null default now(),
-        updated_at timestamptz not null default now(),
-        unique (normalized_url, analysis_version, content_hash)
-      );
-      create index if not exists ${REPORT_TABLE}_lookup_idx
-      on ${REPORT_TABLE} (normalized_url, analysis_version, content_hash);
-    `)
-    .then(() => undefined);
+  const response = await fetch(`${config.url}${path}`, {
+    ...init,
+    headers: {
+      apikey: config.secret,
+      Authorization: `Bearer ${config.secret}`,
+      ...(init?.headers ?? {}),
+    },
+    cache: "no-store",
+  });
 
-  return initPromise;
+  return response;
+}
+
+async function ensureBucket() {
+  if (bucketEnsured) return;
+
+  const listResponse = await supabaseRequest("/storage/v1/bucket");
+  if (!listResponse) return;
+
+  if (!listResponse.ok) {
+    const text = await listResponse.text();
+    throw new Error(`Could not inspect report bucket (${listResponse.status}): ${text.slice(0, 200)}`);
+  }
+
+  const buckets = (await listResponse.json()) as Array<{ id: string }>;
+  if (!buckets.some((bucket) => bucket.id === REPORT_BUCKET)) {
+    const createResponse = await supabaseRequest("/storage/v1/bucket", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: REPORT_BUCKET,
+        name: REPORT_BUCKET,
+        public: false,
+      }),
+    });
+
+    if (!createResponse?.ok && createResponse?.status !== 409) {
+      const text = await createResponse?.text();
+      throw new Error(`Could not create report bucket (${createResponse?.status}): ${text?.slice(0, 200)}`);
+    }
+  }
+
+  bucketEnsured = true;
 }
 
 export async function loadStoredReport(input: {
@@ -51,37 +75,47 @@ export async function loadStoredReport(input: {
   analysisVersion: string;
   contentHash: string;
 }) {
-  const activePool = getPool();
-  if (!activePool) return null;
+  const config = getSupabaseConfig();
+  if (!config) return null;
 
-  await ensureTable();
+  await ensureBucket();
 
-  const result = await activePool.query<{ report: AuditResult }>(
-    `
-      select report
-      from ${REPORT_TABLE}
-      where normalized_url = $1 and analysis_version = $2 and content_hash = $3
-      limit 1
-    `,
-    [input.normalizedUrl, input.analysisVersion, input.contentHash],
-  );
+  const objectPath = buildObjectPath(input.normalizedUrl, input.analysisVersion, input.contentHash);
+  const response = await supabaseRequest(`/storage/v1/object/${REPORT_BUCKET}/${objectPath}`);
 
-  return result.rows[0]?.report ?? null;
+  if (!response) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    if (response.status === 404 || text.includes('Object not found') || text.includes('not_found')) {
+      return null;
+    }
+    throw new Error(`Could not load cached report (${response.status}): ${text.slice(0, 200)}`);
+  }
+
+  return (await response.json()) as AuditResult;
 }
 
 export async function storeReport(report: AuditResult) {
-  const activePool = getPool();
-  if (!activePool) return;
+  const config = getSupabaseConfig();
+  if (!config) return;
 
-  await ensureTable();
+  await ensureBucket();
 
-  await activePool.query(
-    `
-      insert into ${REPORT_TABLE} (normalized_url, analysis_version, content_hash, report)
-      values ($1, $2, $3, $4::jsonb)
-      on conflict (normalized_url, analysis_version, content_hash)
-      do update set report = excluded.report, updated_at = now()
-    `,
-    [report.analyzedUrl, report.analysisVersion, report.contentHash, JSON.stringify(report)],
-  );
+  const objectPath = buildObjectPath(report.analyzedUrl, report.analysisVersion, report.contentHash);
+  const response = await supabaseRequest(`/storage/v1/object/${REPORT_BUCKET}/${objectPath}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-upsert": "true",
+    },
+    body: JSON.stringify(report),
+  });
+
+  if (!response?.ok) {
+    const text = await response?.text();
+    throw new Error(`Could not store report (${response?.status}): ${text?.slice(0, 200)}`);
+  }
 }
