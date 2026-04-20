@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useId, useState } from "react";
 
 import { analysisProfiles } from "@/lib/analysis/profiles/analysisProfiles";
 import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
@@ -27,6 +27,29 @@ function statusTone(status: CriterionAssessment["status"]) {
   }
 }
 
+function HelpTooltip({ text }: { text: string }) {
+  const tooltipId = useId();
+
+  return (
+    <span className="group relative inline-flex">
+      <button
+        type="button"
+        aria-describedby={tooltipId}
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-zinc-700 text-[11px] text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200 focus:border-emerald-400 focus:text-zinc-100 focus:outline-none"
+      >
+        ?
+      </button>
+      <span
+        id={tooltipId}
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-64 -translate-x-1/2 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs leading-5 text-zinc-300 shadow-2xl shadow-black/40 group-hover:block group-focus-within:block"
+      >
+        {text}
+      </span>
+    </span>
+  );
+}
+
 function ScoreCard({ bucket }: { bucket: ScoreBucketResult }) {
   const tone = scoreTone(bucket.score);
 
@@ -35,12 +58,7 @@ function ScoreCard({ bucket }: { bucket: ScoreBucketResult }) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <p className="text-sm text-zinc-200">{bucket.label}</p>
-          <span
-            title={bucket.helpText}
-            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-zinc-700 text-[11px] text-zinc-400"
-          >
-            ?
-          </span>
+          <HelpTooltip text={bucket.helpText} />
         </div>
         <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>{bucket.score}/100</span>
       </div>
@@ -70,12 +88,7 @@ function CriterionRow({ criterion }: { criterion: CriterionAssessment }) {
     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm font-medium text-zinc-100">{criterion.label}</p>
-        <span
-          title={criterion.helpText}
-          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-zinc-700 text-[11px] text-zinc-400"
-        >
-          ?
-        </span>
+        <HelpTooltip text={criterion.helpText} />
         <span className={`rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-wide ${statusTone(criterion.status)}`}>
           {criterion.status}
         </span>
@@ -309,12 +322,7 @@ export default function Home() {
                     <div key={bucket.key} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-semibold text-white">{bucket.label}</h4>
-                        <span
-                          title={bucket.helpText}
-                          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-zinc-700 text-[11px] text-zinc-400"
-                        >
-                          ?
-                        </span>
+                        <HelpTooltip text={bucket.helpText} />
                         <span className={`rounded-full border px-2 py-0.5 text-[11px] ${scoreTone(bucket.score)}`}>{bucket.score}/100</span>
                       </div>
                       <div className="mt-4 grid gap-3 md:grid-cols-2">
