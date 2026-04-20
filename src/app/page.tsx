@@ -14,6 +14,10 @@ function scoreTone(score: number) {
       : "border-rose-500/30 bg-rose-500/10 text-rose-300";
 }
 
+function scoreBarTone(score: number) {
+  return score >= 75 ? "bg-emerald-300" : score >= 55 ? "bg-amber-300" : "bg-rose-300";
+}
+
 function statusTone(status: CriterionAssessment["status"]) {
   switch (status) {
     case "strong":
@@ -52,9 +56,10 @@ function HelpTooltip({ text }: { text: string }) {
 
 function ScoreCard({ bucket }: { bucket: ScoreBucketResult }) {
   const tone = scoreTone(bucket.score);
+  const barTone = scoreBarTone(bucket.score);
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+    <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <p className="text-sm text-zinc-200">{bucket.label}</p>
@@ -63,14 +68,14 @@ function ScoreCard({ bucket }: { bucket: ScoreBucketResult }) {
         <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>{bucket.score}/100</span>
       </div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-800">
-        <div className="h-full rounded-full bg-zinc-100" style={{ width: `${bucket.score}%` }} />
+        <div className={`h-full rounded-full ${barTone}`} style={{ width: `${bucket.score}%` }} />
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         {bucket.criteria.map((criterion) => (
           <span
             key={criterion.key}
             title={criterion.helpText}
-            className="inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300"
+            className="inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900/90 px-2.5 py-1 text-xs text-zinc-300"
           >
             {criterion.label}
             <span className={`rounded-full border px-1.5 py-0.5 text-[10px] ${statusTone(criterion.status)}`}>
@@ -159,7 +164,7 @@ export default function Home() {
   const resultOutputProfile = result ? toneProfiles[result.outputTone] : selectedOutputProfile;
 
   return (
-    <main className="min-h-screen bg-zinc-950 px-6 py-12 text-zinc-50">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-6 py-12 text-zinc-50">
       <div className="mx-auto flex max-w-6xl flex-col gap-16">
         <header className="flex items-center justify-between gap-4">
           <div>
@@ -190,7 +195,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div id="analyze" className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-6 shadow-2xl shadow-black/30">
+          <div id="analyze" className="rounded-3xl border border-zinc-800/80 bg-zinc-900/70 p-6 shadow-2xl shadow-black/30 backdrop-blur-sm">
             <div className="mb-6">
               <p className="text-sm font-medium text-zinc-200">Analyze a page</p>
               <p className="mt-2 text-sm leading-6 text-zinc-400">
@@ -224,7 +229,7 @@ export default function Home() {
                   </option>
                 ))}
               </select>
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 text-sm text-zinc-400">
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 text-sm text-zinc-400 backdrop-blur-sm">
                 <p className="font-medium text-zinc-200">{selectedOutputProfile.label}</p>
                 <p className="mt-2 leading-6">{selectedOutputProfile.description}</p>
                 <ul className="mt-3 space-y-2 text-xs leading-5 text-zinc-500">
@@ -241,7 +246,7 @@ export default function Home() {
                 {isLoading ? "Analyzing..." : "Go analyze"}
               </button>
             </form>
-            <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 text-sm text-zinc-400">
+            <div className="mt-6 rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 text-sm text-zinc-400 backdrop-blur-sm">
               Current architecture: fetch page → structured criteria assessment → deterministic score calculation → audience-specific explanation layer.
             </div>
             {error ? <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">{error}</div> : null}
@@ -249,19 +254,23 @@ export default function Home() {
         </section>
 
         {result ? (
-          <section className="grid gap-6 rounded-[2rem] border border-zinc-800 bg-zinc-900/60 p-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <section className="grid gap-6 rounded-[2rem] border border-zinc-800/80 bg-zinc-900/55 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm lg:grid-cols-[0.9fr_1.1fr]">
             <div className="space-y-4">
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
-                <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">{resultOutputProfile.verdictLabel}</p>
-                <h2 className="mt-3 text-2xl font-semibold text-white">{result.domain}</h2>
-                <p className="mt-2 text-sm text-zinc-500">{result.analyzedUrl}</p>
-                <p className="mt-2 text-xs text-zinc-600">
-                  Version {result.analysisVersion} • hash {result.contentHash.slice(0, 12)} • {result.reportSource === "cache" ? "loaded from cache" : "fresh analysis"}
-                </p>
-                <p className="mt-4 text-sm leading-7 text-zinc-300">{result.structuredAnalysis.verdict}</p>
-                <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">{resultOutputProfile.summaryLabel}</p>
-                  <p className="mt-3 text-sm leading-6 text-zinc-300">{result.structuredAnalysis.summary}</p>
+              <div className="overflow-hidden rounded-3xl border border-zinc-800/80 bg-zinc-950/75 shadow-[0_10px_30px_rgba(0,0,0,0.2)] backdrop-blur-sm">
+                <div className="border-b border-zinc-800/80 bg-gradient-to-br from-zinc-900 via-zinc-900/95 to-zinc-950 px-6 py-5">
+                  <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">{resultOutputProfile.verdictLabel}</p>
+                  <h2 className="mt-3 text-2xl font-semibold text-white">{result.domain}</h2>
+                  <p className="mt-2 text-sm text-zinc-500">{result.analyzedUrl}</p>
+                  <p className="mt-2 text-xs text-zinc-600">
+                    Version {result.analysisVersion} • hash {result.contentHash.slice(0, 12)} • {result.reportSource === "cache" ? "loaded from cache" : "fresh analysis"}
+                  </p>
+                </div>
+                <div className="px-6 py-5">
+                  <p className="text-sm leading-7 text-zinc-300">{result.structuredAnalysis.verdict}</p>
+                  <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-4 backdrop-blur-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">{resultOutputProfile.summaryLabel}</p>
+                    <p className="mt-3 text-sm leading-6 text-zinc-300">{result.structuredAnalysis.summary}</p>
+                  </div>
                 </div>
               </div>
 
@@ -273,7 +282,7 @@ export default function Home() {
                 </div>
               ) : null}
 
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
+              <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h3 className="text-lg font-semibold text-white">{resultOutputProfile.signalsLabel}</h3>
@@ -282,7 +291,7 @@ export default function Home() {
                 </div>
                 <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
                   {result.structuredAnalysis.rawPageSignals.map((signal) => (
-                    <li key={signal} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
+                    <li key={signal} className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-3 backdrop-blur-sm">
                       {signal}
                     </li>
                   ))}
@@ -292,29 +301,30 @@ export default function Home() {
 
             <div className="grid gap-4">
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
+                <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
                   <h3 className="text-lg font-semibold text-white">{resultOutputProfile.problemsLabel}</h3>
                   <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
                     {result.structuredAnalysis.problems.map((problem) => (
-                      <li key={problem} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
+                      <li key={problem} className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-3 backdrop-blur-sm">
                         {problem}
                       </li>
                     ))}
                   </ul>
                 </div>
-                <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
+                <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
                   <h3 className="text-lg font-semibold text-white">{resultOutputProfile.fixesLabel}</h3>
                   <ol className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
                     {result.structuredAnalysis.fixes.map((fix, index) => (
-                      <li key={fix} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
-                        <span className="mr-2 text-zinc-500">{index + 1}.</span>{fix}
+                      <li key={fix} className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-3 backdrop-blur-sm">
+                        <span className="mr-2 text-zinc-500">{index + 1}.</span>
+                        {fix}
                       </li>
                     ))}
                   </ol>
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
+              <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
                 <h3 className="text-lg font-semibold text-white">Detailed scoring breakdown</h3>
                 <p className="mt-3 text-sm leading-6 text-zinc-400">
                   The full bucket-by-bucket and criterion-by-criterion breakdown now lives on a separate page, so this main report can stay focused.
@@ -327,14 +337,14 @@ export default function Home() {
                 </a>
               </div>
 
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
+              <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
                 <h3 className="text-lg font-semibold text-white">{resultOutputProfile.rewriteLabel}</h3>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
+                  <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-4 backdrop-blur-sm">
                     <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Hero line</p>
                     <p className="mt-3 text-sm leading-6 text-zinc-200">{result.structuredAnalysis.rewrites.hero}</p>
                   </div>
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
+                  <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-4 backdrop-blur-sm">
                     <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">CTA</p>
                     <p className="mt-3 text-sm leading-6 text-zinc-200">{result.structuredAnalysis.rewrites.cta}</p>
                   </div>
