@@ -1,7 +1,7 @@
 import type { CriterionStatus, ScoreBucketKey } from "./profiles/criteria";
 
 export type AnalysisMode = "neutral";
-export type OutputTone = "neutral" | "goblin";
+export type OutputTone = "newbie" | "developer" | "audit";
 
 export type CriterionAssessment = {
   key: string;

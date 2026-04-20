@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as { url?: string; mode?: AnalysisMode; outputTone?: OutputTone };
     const url = normalizeUrl(body.url ?? "");
     const mode = body.mode ?? "neutral";
-    const outputTone = body.outputTone ?? "neutral";
+    const outputTone = body.outputTone ?? "audit";
     const modeConfig = analysisProfiles[mode];
 
     const html = await fetchPage(url.toString());
@@ -40,6 +40,7 @@ export async function POST(request: Request) {
       normalizedUrl: url.toString(),
       analysisVersion: ANALYSIS_VERSION,
       contentHash,
+      outputTone,
     });
 
     if (cachedReport) {

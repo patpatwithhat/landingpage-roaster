@@ -16,9 +16,9 @@ function getSupabaseConfig() {
   return { url, secret };
 }
 
-function buildObjectPath(normalizedUrl: string, analysisVersion: string, contentHash: string) {
+function buildObjectPath(normalizedUrl: string, analysisVersion: string, contentHash: string, outputTone: AuditResult["outputTone"]) {
   const urlHash = createHash("sha256").update(normalizedUrl).digest("hex");
-  return `${analysisVersion}/${urlHash}/${contentHash}.json`;
+  return `${analysisVersion}/${outputTone}/${urlHash}/${contentHash}.json`;
 }
 
 async function supabaseRequest(path: string, init?: RequestInit) {
@@ -74,13 +74,14 @@ export async function loadStoredReport(input: {
   normalizedUrl: string;
   analysisVersion: string;
   contentHash: string;
+  outputTone: AuditResult["outputTone"];
 }) {
   const config = getSupabaseConfig();
   if (!config) return null;
 
   await ensureBucket();
 
-  const objectPath = buildObjectPath(input.normalizedUrl, input.analysisVersion, input.contentHash);
+  const objectPath = buildObjectPath(input.normalizedUrl, input.analysisVersion, input.contentHash, input.outputTone);
   const response = await supabaseRequest(`/storage/v1/object/${REPORT_BUCKET}/${objectPath}`);
 
   if (!response) {
@@ -104,7 +105,7 @@ export async function storeReport(report: AuditResult) {
 
   await ensureBucket();
 
-  const objectPath = buildObjectPath(report.analyzedUrl, report.analysisVersion, report.contentHash);
+  const objectPath = buildObjectPath(report.analyzedUrl, report.analysisVersion, report.contentHash, report.outputTone);
   const response = await supabaseRequest(`/storage/v1/object/${REPORT_BUCKET}/${objectPath}`, {
     method: "POST",
     headers: {

@@ -12,7 +12,7 @@ export function buildSystemPrompt(outputTone: OutputTone, modeInstructions: stri
     "You analyze landing pages for conversion quality.",
     "Be specific, grounded in the provided page signals, and avoid generic fluff.",
     "Return valid JSON only.",
-    "The underlying analysis must stay neutral and diagnostic, even if the requested presentation tone changes.",
+    "The underlying analysis must stay neutral and diagnostic, even if the requested presentation mode changes.",
     "Assess each criterion explicitly instead of inventing top-level scores directly.",
     "Problems and fixes should contain exactly 3 items each.",
     "rawPageSignals should contain 3 to 6 concise factual observations from the page.",

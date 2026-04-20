@@ -96,13 +96,14 @@ function CriterionRow({ criterion }: { criterion: CriterionAssessment }) {
 
 const defaultAnalysisProfile = analysisProfiles.neutral;
 const availableTones = Object.values(toneProfiles);
+const defaultOutputProfile = toneProfiles.audit;
 
 export default function Home() {
   const [url, setUrl] = useState("");
   const [result, setResult] = useState<AuditResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [outputTone, setOutputTone] = useState<OutputTone>("neutral");
+  const [outputTone, setOutputTone] = useState<OutputTone>(defaultOutputProfile.key);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -142,6 +143,8 @@ export default function Home() {
 
   const buckets = result?.structuredAnalysis.buckets ?? [];
   const scores = result?.structuredAnalysis.scores;
+  const selectedOutputProfile = toneProfiles[outputTone];
+  const resultOutputProfile = result ? toneProfiles[result.outputTone] : selectedOutputProfile;
 
   return (
     <main className="min-h-screen bg-zinc-950 px-6 py-12 text-zinc-50">
@@ -149,7 +152,7 @@ export default function Home() {
         <header className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">Landingpage Roaster</p>
-            <p className="mt-2 text-sm text-zinc-400">Analyze first, style the voice second.</p>
+            <p className="mt-2 text-sm text-zinc-400">Analyze once, then explain it for the right person.</p>
           </div>
           <a
             href="#analyze"
@@ -165,13 +168,13 @@ export default function Home() {
               {defaultAnalysisProfile.badge}
             </div>
             <h1 className="text-5xl font-semibold tracking-tight text-white sm:text-6xl">
-              Get a real landing page analysis, then decide how spicy it should sound.
+              Get a real landing page analysis, then shape it for the person reading it.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300">{defaultAnalysisProfile.description}</p>
             <div className="mt-8 flex flex-wrap gap-3 text-sm text-zinc-300">
               <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">{defaultAnalysisProfile.label}</span>
               <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">Criteria-based scoring</span>
-              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">OpenAI-backed analysis</span>
+              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">Audience-specific output modes</span>
             </div>
           </div>
 
@@ -179,7 +182,7 @@ export default function Home() {
             <div className="mb-6">
               <p className="text-sm font-medium text-zinc-200">Analyze a page</p>
               <p className="mt-2 text-sm leading-6 text-zinc-400">
-                The app extracts page signals, scores explicit criteria, and shows you what each score actually means.
+                The app extracts page signals, scores explicit criteria, and then explains the result differently for newbies, developers, or audit-style reviews.
               </p>
             </div>
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -195,7 +198,7 @@ export default function Home() {
                 className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-4 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-emerald-400"
               />
               <label className="text-sm text-zinc-300" htmlFor="tone">
-                UI tone
+                Report mode
               </label>
               <select
                 id="tone"
@@ -205,7 +208,7 @@ export default function Home() {
               >
                 {availableTones.map((tone) => (
                   <option key={tone.key} value={tone.key}>
-                    {tone.label}
+                    {tone.selectorLabel}
                   </option>
                 ))}
               </select>
@@ -218,7 +221,7 @@ export default function Home() {
               </button>
             </form>
             <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 text-sm text-zinc-400">
-              Current architecture: fetch page → structured criteria assessment → deterministic score calculation.
+              Current architecture: fetch page → structured criteria assessment → deterministic score calculation → audience-specific explanation layer.
             </div>
             {error ? <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">{error}</div> : null}
           </div>
@@ -228,7 +231,7 @@ export default function Home() {
           <section className="grid gap-6 rounded-[2rem] border border-zinc-800 bg-zinc-900/60 p-6 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="space-y-4">
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
-                <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">Analysis verdict</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">{resultOutputProfile.verdictLabel}</p>
                 <h2 className="mt-3 text-2xl font-semibold text-white">{result.domain}</h2>
                 <p className="mt-2 text-sm text-zinc-500">{result.analyzedUrl}</p>
                 <p className="mt-2 text-xs text-zinc-600">
@@ -249,7 +252,12 @@ export default function Home() {
               ) : null}
 
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
-                <h3 className="text-lg font-semibold text-white">Observed page signals</h3>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Observed page signals</h3>
+                    <p className="mt-2 text-sm text-zinc-400">{resultOutputProfile.description}</p>
+                  </div>
+                </div>
                 <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
                   {result.structuredAnalysis.rawPageSignals.map((signal) => (
                     <li key={signal} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
@@ -263,7 +271,7 @@ export default function Home() {
             <div className="grid gap-4">
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
-                  <h3 className="text-lg font-semibold text-white">Top 3 biggest problems</h3>
+                  <h3 className="text-lg font-semibold text-white">{resultOutputProfile.problemsLabel}</h3>
                   <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
                     {result.structuredAnalysis.problems.map((problem) => (
                       <li key={problem} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
@@ -273,7 +281,7 @@ export default function Home() {
                   </ul>
                 </div>
                 <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
-                  <h3 className="text-lg font-semibold text-white">Quick fixes</h3>
+                  <h3 className="text-lg font-semibold text-white">{resultOutputProfile.fixesLabel}</h3>
                   <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
                     {result.structuredAnalysis.fixes.map((fix) => (
                       <li key={fix} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
@@ -285,7 +293,7 @@ export default function Home() {
               </div>
 
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
-                <h3 className="text-lg font-semibold text-white">Why the scores look like this</h3>
+                <h3 className="text-lg font-semibold text-white">{resultOutputProfile.explanationLabel}</h3>
                 <div className="mt-4 grid gap-4">
                   {buckets.map((bucket) => (
                     <div key={bucket.key} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
@@ -310,7 +318,7 @@ export default function Home() {
               </div>
 
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
-                <h3 className="text-lg font-semibold text-white">Suggested rewrite</h3>
+                <h3 className="text-lg font-semibold text-white">{resultOutputProfile.rewriteLabel}</h3>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
                     <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Hero line</p>
