@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useId, useState } from "react";
+import { FormEvent, useEffect, useId, useState } from "react";
 
 import { analysisProfiles } from "@/lib/analysis/profiles/analysisProfiles";
 import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
@@ -83,30 +83,6 @@ function ScoreCard({ bucket }: { bucket: ScoreBucketResult }) {
   );
 }
 
-function CriterionRow({ criterion }: { criterion: CriterionAssessment }) {
-  return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm font-medium text-zinc-100">{criterion.label}</p>
-        <HelpTooltip text={criterion.helpText} />
-        <span className={`rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-wide ${statusTone(criterion.status)}`}>
-          {criterion.status}
-        </span>
-      </div>
-      <p className="mt-2 text-sm leading-6 text-zinc-300">{criterion.note}</p>
-      {criterion.evidence.length ? (
-        <ul className="mt-3 space-y-2 text-xs leading-5 text-zinc-400">
-          {criterion.evidence.map((item) => (
-            <li key={item} className="rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2">
-              {item}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
-
 const defaultAnalysisProfile = analysisProfiles.neutral;
 const availableTones = Object.values(toneProfiles);
 const defaultOutputProfile = toneProfiles.audit;
@@ -118,10 +94,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [outputTone, setOutputTone] = useState<OutputTone>(defaultOutputProfile.key);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!url.trim() || isLoading) return;
-
+  async function runAnalysis(nextUrl: string, nextOutputTone: OutputTone) {
     setIsLoading(true);
     setError(null);
 
@@ -132,9 +105,9 @@ export default function Home() {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          url: url.trim(),
+          url: nextUrl.trim(),
           mode: "neutral",
-          outputTone,
+          outputTone: nextOutputTone,
         }),
       });
 
@@ -145,6 +118,8 @@ export default function Home() {
       }
 
       setResult(payload.result);
+      setUrl(nextUrl.trim());
+      setOutputTone(nextOutputTone);
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : "Analysis failed.";
       setError(message);
@@ -153,6 +128,30 @@ export default function Home() {
       setIsLoading(false);
     }
   }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!url.trim() || isLoading) return;
+
+    await runAnalysis(url, outputTone);
+  }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const prefilledUrl = params.get("url")?.trim();
+    const prefilledTone = params.get("tone");
+    const safeTone = prefilledTone && prefilledTone in toneProfiles ? (prefilledTone as OutputTone) : defaultOutputProfile.key;
+
+    if (!prefilledUrl) return;
+    if (isLoading) return;
+    if (result?.analyzedUrl === prefilledUrl && result.outputTone === safeTone) return;
+
+    const timer = window.setTimeout(() => {
+      void runAnalysis(prefilledUrl, safeTone);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [result, isLoading]);
 
   const buckets = result?.structuredAnalysis.buckets ?? [];
   const scores = result?.structuredAnalysis.scores;
@@ -316,23 +315,16 @@ export default function Home() {
               </div>
 
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
-                <h3 className="text-lg font-semibold text-white">{resultOutputProfile.explanationLabel}</h3>
-                <div className="mt-4 grid gap-4">
-                  {buckets.map((bucket) => (
-                    <div key={bucket.key} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-semibold text-white">{bucket.label}</h4>
-                        <HelpTooltip text={bucket.helpText} />
-                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${scoreTone(bucket.score)}`}>{bucket.score}/100</span>
-                      </div>
-                      <div className="mt-4 grid gap-3 md:grid-cols-2">
-                        {bucket.criteria.map((criterion) => (
-                          <CriterionRow key={criterion.key} criterion={criterion} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <h3 className="text-lg font-semibold text-white">Detailed scoring breakdown</h3>
+                <p className="mt-3 text-sm leading-6 text-zinc-400">
+                  The full bucket-by-bucket and criterion-by-criterion breakdown now lives on a separate page, so this main report can stay focused.
+                </p>
+                <a
+                  href={`/breakdown?url=${encodeURIComponent(result.analyzedUrl)}&tone=${result.outputTone}&mode=${result.mode}`}
+                  className="mt-5 inline-flex rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
+                >
+                  View scoring breakdown
+                </a>
               </div>
 
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
