@@ -1,46 +1,10 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 
-type AuditResult = {
-  domain: string;
-  verdict: string;
-  clarity: number;
-  cta: number;
-  trust: number;
-  seo: number;
-  problems: string[];
-  fixes: string[];
-  heroRewrite: string;
-  ctaRewrite: string;
-};
-
-function buildMockResult(input: string): AuditResult {
-  const normalized = input.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
-  const domain = normalized || "your-site.com";
-
-  return {
-    domain,
-    verdict:
-      "This page probably knows what it wants to be, but it is making visitors work too hard to get there.",
-    clarity: 58,
-    cta: 64,
-    trust: 49,
-    seo: 61,
-    problems: [
-      "The headline sounds polished, but still vague about the actual outcome.",
-      "The primary CTA exists, but it does not feel urgent or specific enough.",
-      "There are not enough trust signals near the top of the page.",
-    ],
-    fixes: [
-      "Rewrite the hero around one specific promise for one specific type of user.",
-      "Tighten the CTA to a single clear next step with less generic wording.",
-      "Add proof above the fold, like customer logos, a result, or a product screenshot.",
-    ],
-    heroRewrite: "Turn confused visitors into qualified demos with a landing page audit that tells you exactly what to fix.",
-    ctaRewrite: "Analyze my page",
-  };
-}
+import { analysisProfiles } from "@/lib/analysis/profiles/analysisProfiles";
+import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
+import type { AuditResult, OutputTone } from "@/lib/analysis/schema";
 
 function ScoreCard({ label, score }: { label: string; score: number }) {
   const tone =
@@ -65,19 +29,50 @@ function ScoreCard({ label, score }: { label: string; score: number }) {
   );
 }
 
+const defaultAnalysisProfile = analysisProfiles.neutral;
+const availableTones = Object.values(toneProfiles);
+
 export default function Home() {
   const [url, setUrl] = useState("");
-  const [submittedUrl, setSubmittedUrl] = useState<string | null>(null);
+  const [result, setResult] = useState<AuditResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [outputTone, setOutputTone] = useState<OutputTone>("neutral");
 
-  const result = useMemo(() => {
-    if (!submittedUrl) return null;
-    return buildMockResult(submittedUrl);
-  }, [submittedUrl]);
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!url.trim()) return;
-    setSubmittedUrl(url.trim());
+    if (!url.trim() || isLoading) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          url: url.trim(),
+          mode: "neutral",
+          outputTone,
+        }),
+      });
+
+      const payload = (await response.json()) as { result?: AuditResult; error?: string };
+
+      if (!response.ok || !payload.result) {
+        throw new Error(payload.error ?? "Analysis failed.");
+      }
+
+      setResult(payload.result);
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : "Analysis failed.";
+      setError(message);
+      setResult(null);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -89,7 +84,7 @@ export default function Home() {
               Landingpage Roaster
             </p>
             <p className="mt-2 text-sm text-zinc-400">
-              Savage, useful landing page feedback in seconds.
+              Analyze first, style the voice second.
             </p>
           </div>
           <a
@@ -103,28 +98,23 @@ export default function Home() {
         <section className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div className="max-w-3xl">
             <div className="mb-6 inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
-              Goblin-grade website teardown
+              {defaultAnalysisProfile.badge}
             </div>
             <h1 className="text-5xl font-semibold tracking-tight text-white sm:text-6xl">
-              Roast your landing page, then fix what actually matters.
+              Get a real landing page analysis, then decide how spicy it should sound.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300">
-              Paste in a URL and get a sharp audit of clarity, CTA strength,
-              trust signals, and SEO basics. Less fluff, more &quot;oh damn,
-              yeah, that is broken.&quot;
+              {defaultAnalysisProfile.description}
             </p>
             <div className="mt-8 flex flex-wrap gap-3 text-sm text-zinc-300">
               <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">
-                Clarity score
+                {defaultAnalysisProfile.label}
               </span>
               <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">
-                CTA analysis
+                Tone can be swapped later
               </span>
               <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">
-                SEO quick audit
-              </span>
-              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">
-                Goblin verdict
+                OpenAI-backed analysis
               </span>
             </div>
           </div>
@@ -136,8 +126,8 @@ export default function Home() {
             <div className="mb-6">
               <p className="text-sm font-medium text-zinc-200">Analyze a page</p>
               <p className="mt-2 text-sm leading-6 text-zinc-400">
-                Start simple. Drop in a homepage URL and let the goblin do its
-                work.
+                Right now the app fetches the page, extracts signals, sends them to OpenAI, and renders the
+                result below.
               </p>
             </div>
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -152,17 +142,37 @@ export default function Home() {
                 placeholder="https://your-site.com"
                 className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-4 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-emerald-400"
               />
+              <label className="text-sm text-zinc-300" htmlFor="tone">
+                UI tone
+              </label>
+              <select
+                id="tone"
+                value={outputTone}
+                onChange={(event) => setOutputTone(event.target.value as OutputTone)}
+                className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-4 text-base text-white outline-none transition focus:border-emerald-400"
+              >
+                {availableTones.map((tone) => (
+                  <option key={tone.key} value={tone.key}>
+                    {tone.label}
+                  </option>
+                ))}
+              </select>
               <button
                 type="submit"
-                className="rounded-2xl bg-emerald-400 px-5 py-4 text-base font-semibold text-zinc-950 transition hover:bg-emerald-300"
+                disabled={isLoading}
+                className="rounded-2xl bg-emerald-400 px-5 py-4 text-base font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Go analyze
+                {isLoading ? "Analyzing..." : "Go analyze"}
               </button>
             </form>
             <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 text-sm text-zinc-400">
-              Example output: &quot;Your hero sounds expensive, vague, and mildly
-              allergic to conversion. Fix the headline, focus the CTA, add proof.&quot;
+              Current architecture: fetch page → neutral analysis → tone-specific presentation.
             </div>
+            {error ? (
+              <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
+                {error}
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -170,14 +180,12 @@ export default function Home() {
           <section className="grid gap-6 rounded-[2rem] border border-zinc-800 bg-zinc-900/60 p-6 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="space-y-4">
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
-                <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">
-                  Goblin verdict
-                </p>
-                <h2 className="mt-3 text-2xl font-semibold text-white">
-                  {result.domain}
-                </h2>
-                <p className="mt-4 text-sm leading-7 text-zinc-300">
-                  {result.verdict}
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">Analysis verdict</p>
+                <h2 className="mt-3 text-2xl font-semibold text-white">{result.domain}</h2>
+                <p className="mt-2 text-sm text-zinc-500">{result.analyzedUrl}</p>
+                <p className="mt-4 text-sm leading-7 text-zinc-300">{result.verdict}</p>
+                <p className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4 text-sm leading-6 text-zinc-300">
+                  {result.summary}
                 </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -185,6 +193,16 @@ export default function Home() {
                 <ScoreCard label="CTA" score={result.cta} />
                 <ScoreCard label="Trust" score={result.trust} />
                 <ScoreCard label="SEO" score={result.seo} />
+              </div>
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
+                <h3 className="text-lg font-semibold text-white">Observed page signals</h3>
+                <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
+                  {result.rawPageSignals.map((signal) => (
+                    <li key={signal} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
+                      {signal}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
 
@@ -213,50 +231,18 @@ export default function Home() {
                 <h3 className="text-lg font-semibold text-white">Suggested rewrite</h3>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-                      Hero line
-                    </p>
-                    <p className="mt-3 text-sm leading-6 text-zinc-200">
-                      {result.heroRewrite}
-                    </p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Hero line</p>
+                    <p className="mt-3 text-sm leading-6 text-zinc-200">{result.heroRewrite}</p>
                   </div>
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-                      CTA
-                    </p>
-                    <p className="mt-3 text-sm leading-6 text-zinc-200">
-                      {result.ctaRewrite}
-                    </p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">CTA</p>
+                    <p className="mt-3 text-sm leading-6 text-zinc-200">{result.ctaRewrite}</p>
                   </div>
                 </div>
               </div>
             </div>
           </section>
         ) : null}
-
-        <section className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-6">
-            <h2 className="text-lg font-semibold text-white">See the problems fast</h2>
-            <p className="mt-3 text-sm leading-6 text-zinc-400">
-              Find out whether people understand what you do, who it is for,
-              and why they should care in the first few seconds.
-            </p>
-          </div>
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-6">
-            <h2 className="text-lg font-semibold text-white">Get useful fixes</h2>
-            <p className="mt-3 text-sm leading-6 text-zinc-400">
-              Not just roast for the memes. Get practical suggestions for the
-              hero copy, CTA, trust signals, and page structure.
-            </p>
-          </div>
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-6">
-            <h2 className="text-lg font-semibold text-white">Stay lightweight</h2>
-            <p className="mt-3 text-sm leading-6 text-zinc-400">
-              Fast homepage-first audits now, deeper crawls and pro features
-              later if the thing has legs.
-            </p>
-          </div>
-        </section>
       </div>
     </main>
   );

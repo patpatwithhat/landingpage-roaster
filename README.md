@@ -4,14 +4,15 @@ Savage but useful landing page feedback in seconds.
 
 ## Links
 - Repo: https://github.com/patpatwithhat/landingpage-roaster
-- Production: https://landingpage-roaster.patpatwithhat.xyz
+- Production: https://roaster.patpatwithhat.xyz
 - Fallback Vercel URL: https://landingpage-roaster-i9na6xewu-patpatwithhats-projects.vercel.app
 
 ## Current scope
 - homepage URL input
-- mock audit flow
+- OpenAI-backed landing page analysis
 - clarity / CTA / trust / SEO scoring
-- goblin-style verdict with practical fixes
+- neutral analysis core with swappable output tones
+- suggested fixes and rewrite ideas
 
 ## Project identity
 - Prefix: `LPR`
@@ -23,6 +24,7 @@ Savage but useful landing page feedback in seconds.
 
 ```bash
 npm install
+export LPR_OPENAI_API_KEY=...
 npm run dev
 ```
 
