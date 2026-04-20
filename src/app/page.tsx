@@ -212,6 +212,15 @@ export default function Home() {
                   </option>
                 ))}
               </select>
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 text-sm text-zinc-400">
+                <p className="font-medium text-zinc-200">{selectedOutputProfile.label}</p>
+                <p className="mt-2 leading-6">{selectedOutputProfile.description}</p>
+                <ul className="mt-3 space-y-2 text-xs leading-5 text-zinc-500">
+                  {selectedOutputProfile.emphasisPoints.map((point) => (
+                    <li key={point}>• {point}</li>
+                  ))}
+                </ul>
+              </div>
               <button
                 type="submit"
                 disabled={isLoading}
@@ -238,9 +247,10 @@ export default function Home() {
                   Version {result.analysisVersion} • hash {result.contentHash.slice(0, 12)} • {result.reportSource === "cache" ? "loaded from cache" : "fresh analysis"}
                 </p>
                 <p className="mt-4 text-sm leading-7 text-zinc-300">{result.structuredAnalysis.verdict}</p>
-                <p className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4 text-sm leading-6 text-zinc-300">
-                  {result.structuredAnalysis.summary}
-                </p>
+                <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">{resultOutputProfile.summaryLabel}</p>
+                  <p className="mt-3 text-sm leading-6 text-zinc-300">{result.structuredAnalysis.summary}</p>
+                </div>
               </div>
 
               {scores ? (
@@ -254,7 +264,7 @@ export default function Home() {
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-white">Observed page signals</h3>
+                    <h3 className="text-lg font-semibold text-white">{resultOutputProfile.signalsLabel}</h3>
                     <p className="mt-2 text-sm text-zinc-400">{resultOutputProfile.description}</p>
                   </div>
                 </div>
@@ -282,13 +292,13 @@ export default function Home() {
                 </div>
                 <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
                   <h3 className="text-lg font-semibold text-white">{resultOutputProfile.fixesLabel}</h3>
-                  <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
-                    {result.structuredAnalysis.fixes.map((fix) => (
+                  <ol className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
+                    {result.structuredAnalysis.fixes.map((fix, index) => (
                       <li key={fix} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
-                        {fix}
+                        <span className="mr-2 text-zinc-500">{index + 1}.</span>{fix}
                       </li>
                     ))}
-                  </ul>
+                  </ol>
                 </div>
               </div>
 

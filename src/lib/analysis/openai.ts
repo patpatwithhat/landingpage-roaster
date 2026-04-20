@@ -17,6 +17,7 @@ export function buildSystemPrompt(outputTone: OutputTone, modeInstructions: stri
     "Problems and fixes should contain exactly 3 items each.",
     "rawPageSignals should contain 3 to 6 concise factual observations from the page.",
     ...modeInstructions,
+    `Audience mode: ${toneProfiles[outputTone].label}.`,
     toneProfiles[outputTone].presentationInstruction,
     RESPONSE_SHAPE_INSTRUCTION,
   ].join(" ");
