@@ -4,27 +4,92 @@ import { FormEvent, useState } from "react";
 
 import { analysisProfiles } from "@/lib/analysis/profiles/analysisProfiles";
 import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
-import type { AuditResult, OutputTone } from "@/lib/analysis/schema";
+import type { AuditResult, CriterionAssessment, OutputTone, ScoreBucketResult } from "@/lib/analysis/schema";
 
-function ScoreCard({ label, score }: { label: string; score: number }) {
-  const tone =
-    score >= 75
-      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-      : score >= 55
-        ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
-        : "border-rose-500/30 bg-rose-500/10 text-rose-300";
+function scoreTone(score: number) {
+  return score >= 75
+    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+    : score >= 55
+      ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+      : "border-rose-500/30 bg-rose-500/10 text-rose-300";
+}
+
+function statusTone(status: CriterionAssessment["status"]) {
+  switch (status) {
+    case "strong":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+    case "okay":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-300";
+    case "weak":
+      return "border-orange-500/30 bg-orange-500/10 text-orange-300";
+    default:
+      return "border-rose-500/30 bg-rose-500/10 text-rose-300";
+  }
+}
+
+function ScoreCard({ bucket }: { bucket: ScoreBucketResult }) {
+  const tone = scoreTone(bucket.score);
 
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
-      <p className="text-sm text-zinc-400">{label}</p>
-      <div className="mt-3 flex items-center justify-between gap-3">
-        <div className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-800">
-          <div className="h-full rounded-full bg-zinc-100" style={{ width: `${score}%` }} />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-zinc-200">{bucket.label}</p>
+          <span
+            title={bucket.helpText}
+            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-zinc-700 text-[11px] text-zinc-400"
+          >
+            ?
+          </span>
         </div>
-        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>
-          {score}/100
+        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>{bucket.score}/100</span>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-800">
+        <div className="h-full rounded-full bg-zinc-100" style={{ width: `${bucket.score}%` }} />
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {bucket.criteria.map((criterion) => (
+          <span
+            key={criterion.key}
+            title={criterion.helpText}
+            className="inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300"
+          >
+            {criterion.label}
+            <span className={`rounded-full border px-1.5 py-0.5 text-[10px] ${statusTone(criterion.status)}`}>
+              {criterion.status}
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CriterionRow({ criterion }: { criterion: CriterionAssessment }) {
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm font-medium text-zinc-100">{criterion.label}</p>
+        <span
+          title={criterion.helpText}
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-zinc-700 text-[11px] text-zinc-400"
+        >
+          ?
+        </span>
+        <span className={`rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-wide ${statusTone(criterion.status)}`}>
+          {criterion.status}
         </span>
       </div>
+      <p className="mt-2 text-sm leading-6 text-zinc-300">{criterion.note}</p>
+      {criterion.evidence.length ? (
+        <ul className="mt-3 space-y-2 text-xs leading-5 text-zinc-400">
+          {criterion.evidence.map((item) => (
+            <li key={item} className="rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2">
+              {item}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -75,17 +140,16 @@ export default function Home() {
     }
   }
 
+  const buckets = result?.structuredAnalysis.buckets ?? [];
+  const scores = result?.structuredAnalysis.scores;
+
   return (
     <main className="min-h-screen bg-zinc-950 px-6 py-12 text-zinc-50">
       <div className="mx-auto flex max-w-6xl flex-col gap-16">
         <header className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">
-              Landingpage Roaster
-            </p>
-            <p className="mt-2 text-sm text-zinc-400">
-              Analyze first, style the voice second.
-            </p>
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">Landingpage Roaster</p>
+            <p className="mt-2 text-sm text-zinc-400">Analyze first, style the voice second.</p>
           </div>
           <a
             href="#analyze"
@@ -103,31 +167,19 @@ export default function Home() {
             <h1 className="text-5xl font-semibold tracking-tight text-white sm:text-6xl">
               Get a real landing page analysis, then decide how spicy it should sound.
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300">
-              {defaultAnalysisProfile.description}
-            </p>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300">{defaultAnalysisProfile.description}</p>
             <div className="mt-8 flex flex-wrap gap-3 text-sm text-zinc-300">
-              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">
-                {defaultAnalysisProfile.label}
-              </span>
-              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">
-                Tone can be swapped later
-              </span>
-              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">
-                OpenAI-backed analysis
-              </span>
+              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">{defaultAnalysisProfile.label}</span>
+              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">Criteria-based scoring</span>
+              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">OpenAI-backed analysis</span>
             </div>
           </div>
 
-          <div
-            id="analyze"
-            className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-6 shadow-2xl shadow-black/30"
-          >
+          <div id="analyze" className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-6 shadow-2xl shadow-black/30">
             <div className="mb-6">
               <p className="text-sm font-medium text-zinc-200">Analyze a page</p>
               <p className="mt-2 text-sm leading-6 text-zinc-400">
-                Right now the app fetches the page, extracts signals, sends them to OpenAI, and renders the
-                result below.
+                The app extracts page signals, scores explicit criteria, and shows you what each score actually means.
               </p>
             </div>
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -166,13 +218,9 @@ export default function Home() {
               </button>
             </form>
             <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 text-sm text-zinc-400">
-              Current architecture: fetch page → neutral analysis → tone-specific presentation.
+              Current architecture: fetch page → structured criteria assessment → deterministic score calculation.
             </div>
-            {error ? (
-              <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
-                {error}
-              </div>
-            ) : null}
+            {error ? <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">{error}</div> : null}
           </div>
         </section>
 
@@ -183,21 +231,27 @@ export default function Home() {
                 <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">Analysis verdict</p>
                 <h2 className="mt-3 text-2xl font-semibold text-white">{result.domain}</h2>
                 <p className="mt-2 text-sm text-zinc-500">{result.analyzedUrl}</p>
-                <p className="mt-4 text-sm leading-7 text-zinc-300">{result.verdict}</p>
+                <p className="mt-2 text-xs text-zinc-600">
+                  Version {result.analysisVersion} • hash {result.contentHash.slice(0, 12)} • {result.reportSource === "cache" ? "loaded from cache" : "fresh analysis"}
+                </p>
+                <p className="mt-4 text-sm leading-7 text-zinc-300">{result.structuredAnalysis.verdict}</p>
                 <p className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4 text-sm leading-6 text-zinc-300">
-                  {result.summary}
+                  {result.structuredAnalysis.summary}
                 </p>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <ScoreCard label="Clarity" score={result.clarity} />
-                <ScoreCard label="CTA" score={result.cta} />
-                <ScoreCard label="Trust" score={result.trust} />
-                <ScoreCard label="SEO" score={result.seo} />
-              </div>
+
+              {scores ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {buckets.map((bucket) => (
+                    <ScoreCard key={bucket.key} bucket={bucket} />
+                  ))}
+                </div>
+              ) : null}
+
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
                 <h3 className="text-lg font-semibold text-white">Observed page signals</h3>
                 <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
-                  {result.rawPageSignals.map((signal) => (
+                  {result.structuredAnalysis.rawPageSignals.map((signal) => (
                     <li key={signal} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
                       {signal}
                     </li>
@@ -206,37 +260,65 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
-                <h3 className="text-lg font-semibold text-white">Top 3 biggest problems</h3>
-                <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
-                  {result.problems.map((problem) => (
-                    <li key={problem} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
-                      {problem}
-                    </li>
-                  ))}
-                </ul>
+            <div className="grid gap-4">
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
+                  <h3 className="text-lg font-semibold text-white">Top 3 biggest problems</h3>
+                  <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
+                    {result.structuredAnalysis.problems.map((problem) => (
+                      <li key={problem} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
+                        {problem}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
+                  <h3 className="text-lg font-semibold text-white">Quick fixes</h3>
+                  <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
+                    {result.structuredAnalysis.fixes.map((fix) => (
+                      <li key={fix} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
+                        {fix}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
+
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
-                <h3 className="text-lg font-semibold text-white">Quick fixes</h3>
-                <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
-                  {result.fixes.map((fix) => (
-                    <li key={fix} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
-                      {fix}
-                    </li>
+                <h3 className="text-lg font-semibold text-white">Why the scores look like this</h3>
+                <div className="mt-4 grid gap-4">
+                  {buckets.map((bucket) => (
+                    <div key={bucket.key} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-semibold text-white">{bucket.label}</h4>
+                        <span
+                          title={bucket.helpText}
+                          className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-zinc-700 text-[11px] text-zinc-400"
+                        >
+                          ?
+                        </span>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${scoreTone(bucket.score)}`}>{bucket.score}/100</span>
+                      </div>
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        {bucket.criteria.map((criterion) => (
+                          <CriterionRow key={criterion.key} criterion={criterion} />
+                        ))}
+                      </div>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6 lg:col-span-2">
+
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-6">
                 <h3 className="text-lg font-semibold text-white">Suggested rewrite</h3>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
                     <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Hero line</p>
-                    <p className="mt-3 text-sm leading-6 text-zinc-200">{result.heroRewrite}</p>
+                    <p className="mt-3 text-sm leading-6 text-zinc-200">{result.structuredAnalysis.rewrites.hero}</p>
                   </div>
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
                     <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">CTA</p>
-                    <p className="mt-3 text-sm leading-6 text-zinc-200">{result.ctaRewrite}</p>
+                    <p className="mt-3 text-sm leading-6 text-zinc-200">{result.structuredAnalysis.rewrites.cta}</p>
                   </div>
                 </div>
               </div>

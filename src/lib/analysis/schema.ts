@@ -1,46 +1,80 @@
+import type { CriterionStatus, ScoreBucketKey } from "./profiles/criteria";
+
 export type AnalysisMode = "neutral";
 export type OutputTone = "neutral" | "goblin";
+
+export type CriterionAssessment = {
+  key: string;
+  label: string;
+  helpText: string;
+  status: CriterionStatus;
+  confidence: number;
+  evidence: string[];
+  note: string;
+};
+
+export type ScoreBucketResult = {
+  key: ScoreBucketKey;
+  label: string;
+  helpText: string;
+  score: number;
+  criteria: CriterionAssessment[];
+};
+
+export type AuditScores = {
+  clarity: number;
+  cta: number;
+  trust: number;
+  seo: number;
+};
+
+export type StructuredAnalysis = {
+  verdict: string;
+  summary: string;
+  rawPageSignals: string[];
+  problems: string[];
+  fixes: string[];
+  rewrites: {
+    hero: string;
+    cta: string;
+  };
+  buckets: ScoreBucketResult[];
+  scores: AuditScores;
+};
 
 export type AuditResult = {
   domain: string;
   analyzedUrl: string;
   mode: AnalysisMode;
   outputTone: OutputTone;
-  verdict: string;
-  summary: string;
-  clarity: number;
-  cta: number;
-  trust: number;
-  seo: number;
-  problems: string[];
-  fixes: string[];
-  heroRewrite: string;
-  ctaRewrite: string;
-  rawPageSignals: string[];
+  analysisVersion: string;
+  contentHash: string;
+  reportSource: "fresh" | "cache";
+  structuredAnalysis: StructuredAnalysis;
+};
+
+export type RawCriterionPayload = {
+  status?: unknown;
+  confidence?: unknown;
+  evidence?: unknown;
+  note?: unknown;
 };
 
 export type RawAuditPayload = {
   verdict?: unknown;
   summary?: unknown;
-  clarity?: unknown;
-  cta?: unknown;
-  trust?: unknown;
-  seo?: unknown;
+  rawPageSignals?: unknown;
   problems?: unknown;
   fixes?: unknown;
-  heroRewrite?: unknown;
-  ctaRewrite?: unknown;
-  rawPageSignals?: unknown;
+  rewrites?: {
+    hero?: unknown;
+    cta?: unknown;
+  };
+  buckets?: Record<string, Record<string, RawCriterionPayload>>;
 };
 
 const LIST_LIMIT = 3;
 const SIGNAL_LIMIT = 6;
-
-function clampScore(value: unknown) {
-  const parsed = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.max(0, Math.min(100, Math.round(parsed)));
-}
 
 function sanitizeList(value: unknown, limit: number) {
   if (!Array.isArray(value)) return [];
@@ -52,22 +86,21 @@ function ensureLength(items: string[], length: number) {
   return [...items, ...Array.from({ length }, () => "")].slice(0, length);
 }
 
-export function sanitizeAuditResult(payload: RawAuditPayload, url: URL, mode: AnalysisMode, outputTone: OutputTone): AuditResult {
+export function sanitizeText(value: unknown, fallback = "") {
+  return String(value ?? fallback).trim();
+}
+
+export function sanitizeRawAnalysis(payload: RawAuditPayload) {
   return {
-    domain: url.hostname,
-    analyzedUrl: url.toString(),
-    mode,
-    outputTone,
-    verdict: String(payload.verdict ?? "No verdict returned.").trim(),
-    summary: String(payload.summary ?? "").trim(),
-    clarity: clampScore(payload.clarity),
-    cta: clampScore(payload.cta),
-    trust: clampScore(payload.trust),
-    seo: clampScore(payload.seo),
+    verdict: sanitizeText(payload.verdict, "No verdict returned."),
+    summary: sanitizeText(payload.summary),
+    rawPageSignals: sanitizeList(payload.rawPageSignals, SIGNAL_LIMIT),
     problems: ensureLength(sanitizeList(payload.problems, LIST_LIMIT), LIST_LIMIT),
     fixes: ensureLength(sanitizeList(payload.fixes, LIST_LIMIT), LIST_LIMIT),
-    heroRewrite: String(payload.heroRewrite ?? "").trim(),
-    ctaRewrite: String(payload.ctaRewrite ?? "").trim(),
-    rawPageSignals: sanitizeList(payload.rawPageSignals, SIGNAL_LIMIT),
+    rewrites: {
+      hero: sanitizeText(payload.rewrites?.hero),
+      cta: sanitizeText(payload.rewrites?.cta),
+    },
+    buckets: payload.buckets,
   };
 }

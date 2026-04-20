@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
+
 import { NextResponse } from "next/server";
 
-import { MAX_TEXT_CHARS } from "@/lib/analysis/config";
+import { ANALYSIS_VERSION, MAX_TEXT_CHARS } from "@/lib/analysis/config";
 import { analysisProfiles } from "@/lib/analysis/profiles/analysisProfiles";
 import {
   buildUserPrompt,
@@ -12,7 +14,9 @@ import {
   stripHtml,
 } from "@/lib/analysis/page";
 import { analyzeWithOpenAI } from "@/lib/analysis/openai";
-import { sanitizeAuditResult, type AnalysisMode, type OutputTone } from "@/lib/analysis/schema";
+import { loadStoredReport, storeReport } from "@/lib/analysis/report-store";
+import { buildBucketResults, getTopLevelScores } from "@/lib/analysis/scoring";
+import { sanitizeRawAnalysis, type AnalysisMode, type AuditResult, type OutputTone } from "@/lib/analysis/schema";
 
 export async function POST(request: Request) {
   try {
@@ -28,8 +32,27 @@ export async function POST(request: Request) {
     const metaDescription = extractMetaDescription(html);
     const headings = extractHeadings(html);
 
+    const contentHash = createHash("sha256")
+      .update([title, metaDescription, headings.join("|"), pageText].join("\n\n"))
+      .digest("hex");
+
+    const cachedReport = await loadStoredReport({
+      normalizedUrl: url.toString(),
+      analysisVersion: ANALYSIS_VERSION,
+      contentHash,
+    });
+
+    if (cachedReport) {
+      return NextResponse.json({
+        result: {
+          ...cachedReport,
+          outputTone,
+          reportSource: "cache",
+        } satisfies AuditResult,
+      });
+    }
+
     const raw = await analyzeWithOpenAI({
-      mode,
       outputTone,
       modeInstructions: modeConfig.instructions,
       userPrompt: buildUserPrompt({
@@ -43,7 +66,29 @@ export async function POST(request: Request) {
       }),
     });
 
-    const result = sanitizeAuditResult(raw, url, mode, outputTone);
+    const sanitized = sanitizeRawAnalysis(raw);
+    const buckets = buildBucketResults(sanitized.buckets);
+    const result: AuditResult = {
+      domain: url.hostname,
+      analyzedUrl: url.toString(),
+      mode,
+      outputTone,
+      analysisVersion: ANALYSIS_VERSION,
+      contentHash,
+      reportSource: "fresh",
+      structuredAnalysis: {
+        verdict: sanitized.verdict,
+        summary: sanitized.summary,
+        rawPageSignals: sanitized.rawPageSignals,
+        problems: sanitized.problems,
+        fixes: sanitized.fixes,
+        rewrites: sanitized.rewrites,
+        buckets,
+        scores: getTopLevelScores(buckets),
+      },
+    };
+
+    await storeReport(result);
 
     return NextResponse.json({ result });
   } catch (error) {

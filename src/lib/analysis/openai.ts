@@ -1,6 +1,6 @@
 import { ANALYSIS_MODEL, OPENAI_URL, RESPONSE_SHAPE_INSTRUCTION } from "./config";
 import { toneProfiles } from "./profiles/toneProfiles";
-import type { AnalysisMode, OutputTone, RawAuditPayload } from "./schema";
+import type { OutputTone, RawAuditPayload } from "./schema";
 
 type OpenAIMessage = {
   role: "system" | "user";
@@ -13,7 +13,7 @@ export function buildSystemPrompt(outputTone: OutputTone, modeInstructions: stri
     "Be specific, grounded in the provided page signals, and avoid generic fluff.",
     "Return valid JSON only.",
     "The underlying analysis must stay neutral and diagnostic, even if the requested presentation tone changes.",
-    "Use integers from 0 to 100 for clarity, cta, trust, and seo.",
+    "Assess each criterion explicitly instead of inventing top-level scores directly.",
     "Problems and fixes should contain exactly 3 items each.",
     "rawPageSignals should contain 3 to 6 concise factual observations from the page.",
     ...modeInstructions,
@@ -24,7 +24,6 @@ export function buildSystemPrompt(outputTone: OutputTone, modeInstructions: stri
 
 export async function analyzeWithOpenAI(input: {
   userPrompt: string;
-  mode: AnalysisMode;
   outputTone: OutputTone;
   modeInstructions: string[];
 }) {
