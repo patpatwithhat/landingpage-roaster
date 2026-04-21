@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { listProjects } from "@/lib/analysis/projects";
+import { getProjectById, listProjects } from "@/lib/analysis/projects";
 import { listSavedReports } from "@/lib/analysis/saved-reports";
 
 function healthTone(count: number) {
@@ -9,10 +9,18 @@ function healthTone(count: number) {
 
 export default async function ProjectsPage() {
   const [projects, reports] = await Promise.all([listProjects(), listSavedReports()]);
+  const projectRecords = await Promise.all(projects.map((project) => getProjectById(project.id)));
+  const existingProjectRecords = projectRecords.filter((project): project is NonNullable<typeof project> => Boolean(project));
+  const projectRecordMap = new Map(existingProjectRecords.map((project) => [project.id, project]));
 
   const projectInsights = new Map(
     projects.map((project) => {
       const projectReports = reports.filter((report) => report.projectId === project.id);
+      const projectRecord = projectRecordMap.get(project.id);
+      const pageStates = Object.values(projectRecord?.pageStates ?? {});
+      const followUps = pageStates.filter((state) => state.status === "follow_up").length;
+      const inReview = pageStates.filter((state) => state.status === "in_review").length;
+      const resolved = pageStates.filter((state) => state.status === "resolved").length;
       const lowCta = projectReports.filter((report) => report.scores.cta < 55).length;
       const lowTrust = projectReports.filter((report) => report.scores.trust < 55).length;
       const regressions = projectReports.filter((report) => report.compareHintPreviousId && (report.scores.clarity < 55 || report.scores.cta < 55 || report.scores.trust < 55)).length;
@@ -20,9 +28,9 @@ export default async function ProjectsPage() {
         .slice()
         .sort((a, b) => (b.scores.clarity + b.scores.cta + b.scores.trust + b.scores.seo) - (a.scores.clarity + a.scores.cta + a.scores.trust + a.scores.seo))[0];
       const quickWins = projectReports.filter((report) => report.scores.cta < 55 || report.scores.trust < 55 || report.scores.clarity < 55).slice(0, 2);
-      const priority = regressions * 2 + lowCta + lowTrust;
+      const priority = regressions * 2 + lowCta + lowTrust + followUps;
 
-      return [project.id, { lowCta, lowTrust, regressions, strongest, quickWins, priority }];
+      return [project.id, { lowCta, lowTrust, regressions, strongest, quickWins, priority, followUps, inReview, resolved }];
     }),
   );
 
@@ -68,6 +76,11 @@ export default async function ProjectsPage() {
                       <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Weak CTA {insight?.lowCta ?? 0}</span>
                       <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Trust gaps {insight?.lowTrust ?? 0}</span>
                       <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Needs review {insight?.regressions ?? 0}</span>
+                    </div>
+                    <div className="mt-4 grid grid-cols-3 gap-2 text-xs text-zinc-400">
+                      <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Follow-up {insight?.followUps ?? 0}</span>
+                      <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">In review {insight?.inReview ?? 0}</span>
+                      <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Resolved {insight?.resolved ?? 0}</span>
                     </div>
                     {insight?.quickWins?.length ? (
                       <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3">
