@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getProjectById } from "@/lib/analysis/projects";
-import { listSavedReports } from "@/lib/analysis/saved-reports";
 import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
+import { listSavedReports } from "@/lib/analysis/saved-reports";
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,6 +19,26 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     existing.push(report);
     grouped.set(report.analyzedUrl, existing);
   }
+
+  const pages = Array.from(grouped.entries()).map(([url, urlReports]) => {
+    const latest = urlReports[0];
+    const previous = latest.compareHintPreviousId ? urlReports.find((report) => report.id === latest.compareHintPreviousId) : undefined;
+    const totalScore = latest.scores.clarity + latest.scores.cta + latest.scores.trust + latest.scores.seo;
+    const previousTotal = previous ? previous.scores.clarity + previous.scores.cta + previous.scores.trust + previous.scores.seo : null;
+
+    return {
+      url,
+      reports: urlReports,
+      latest,
+      totalScore,
+      delta: previousTotal === null ? null : totalScore - previousTotal,
+      needsReview: latest.scores.cta < 55 || latest.scores.trust < 55 || latest.scores.clarity < 55,
+    };
+  });
+
+  const needsReviewCount = pages.filter((page) => page.needsReview).length;
+  const improvedCount = pages.filter((page) => (page.delta ?? 0) > 0).length;
+  const regressedCount = pages.filter((page) => (page.delta ?? 0) < 0).length;
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-6 py-12 text-zinc-50">
@@ -39,37 +59,75 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5">
+        <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+          <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5 xl:col-span-2">
             <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Reports</p>
             <p className="mt-2 text-3xl font-semibold text-white">{project.reportCount}</p>
           </div>
-          <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5">
-            <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pages</p>
-            <p className="mt-2 text-3xl font-semibold text-white">{project.pageCount}</p>
+          <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5 xl:col-span-2">
+            <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Needs review</p>
+            <p className="mt-2 text-3xl font-semibold text-white">{needsReviewCount}</p>
           </div>
-          <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5">
-            <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Last activity</p>
-            <p className="mt-2 text-sm text-zinc-200">{project.latestReportAt ? new Date(project.latestReportAt).toLocaleString("de-DE") : "No reports yet"}</p>
+          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Improved</p>
+            <p className="mt-2 text-3xl font-semibold text-white">{improvedCount}</p>
+          </div>
+          <div className="rounded-3xl border border-rose-500/20 bg-rose-500/5 p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-rose-300">Regressed</p>
+            <p className="mt-2 text-3xl font-semibold text-white">{regressedCount}</p>
           </div>
         </section>
 
         <section className="rounded-[2rem] border border-zinc-800/80 bg-zinc-900/55 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm">
-          <h2 className="text-2xl font-semibold text-white">Pages in this project</h2>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold text-white">Project overview</h2>
+              <p className="mt-2 text-sm text-zinc-400">See which pages improved, which still need work, and where to jump into report history or compare.</p>
+            </div>
+            <p className="text-sm text-zinc-500">Last activity {project.latestReportAt ? new Date(project.latestReportAt).toLocaleString("de-DE") : "No reports yet"}</p>
+          </div>
+
           <div className="mt-6 grid gap-4">
-            {Array.from(grouped.entries()).map(([url, urlReports]) => (
-              <div key={url} className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5">
+            {pages.map((page) => (
+              <div key={page.url} className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <h3 className="text-base font-semibold text-white">{url}</h3>
-                    <p className="mt-2 text-sm text-zinc-500">{urlReports.length} saved snapshots in this project</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-base font-semibold text-white">{page.url}</h3>
+                      {page.needsReview ? (
+                        <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">needs review</span>
+                      ) : (
+                        <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300">healthy snapshot</span>
+                      )}
+                      {page.delta !== null ? (
+                        <span className={`rounded-full border px-2.5 py-1 text-xs ${page.delta > 0 ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300" : page.delta < 0 ? "border-rose-500/20 bg-rose-500/10 text-rose-300" : "border-zinc-700 bg-zinc-900 text-zinc-400"}`}>
+                          {page.delta > 0 ? `+${page.delta}` : page.delta}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-2 text-sm text-zinc-500">{page.reports.length} saved snapshots in this project</p>
                   </div>
-                  <Link href={`/reports/${urlReports[0].id}`} className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
-                    Open latest report
-                  </Link>
+                  <div className="flex flex-wrap gap-2">
+                    <Link href={`/reports/${page.latest.id}`} className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
+                      Open latest report
+                    </Link>
+                    {page.latest.compareHintPreviousId ? (
+                      <Link href={`/reports/compare?left=${page.latest.compareHintPreviousId}&right=${page.latest.id}`} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300 transition hover:border-emerald-400/40 hover:bg-emerald-500/15">
+                        Compare latest
+                      </Link>
+                    ) : null}
+                  </div>
                 </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4 text-xs text-zinc-400">
+                  <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Clarity {page.latest.scores.clarity}</span>
+                  <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">CTA {page.latest.scores.cta}</span>
+                  <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Trust {page.latest.scores.trust}</span>
+                  <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">SEO {page.latest.scores.seo}</span>
+                </div>
+
                 <div className="mt-4 grid gap-3">
-                  {urlReports.slice(0, 4).map((report) => (
+                  {page.reports.slice(0, 4).map((report) => (
                     <div key={report.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-3">
                       <div>
                         <p className="text-sm text-zinc-200">{new Date(report.updatedAt).toLocaleString("de-DE")}</p>
@@ -90,7 +148,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
             ))}
-            {!grouped.size ? (
+            {!pages.length ? (
               <div className="rounded-3xl border border-dashed border-zinc-800 bg-zinc-950/60 p-10 text-center text-zinc-400">
                 No reports in this project yet. Save an analysis into this project from the main analyzer.
               </div>

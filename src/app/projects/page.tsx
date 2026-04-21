@@ -1,9 +1,24 @@
 import Link from "next/link";
 
 import { listProjects } from "@/lib/analysis/projects";
+import { listSavedReports } from "@/lib/analysis/saved-reports";
 
 export default async function ProjectsPage() {
-  const projects = await listProjects();
+  const [projects, reports] = await Promise.all([listProjects(), listSavedReports()]);
+
+  const projectInsights = new Map(
+    projects.map((project) => {
+      const projectReports = reports.filter((report) => report.projectId === project.id);
+      const lowCta = projectReports.filter((report) => report.scores.cta < 55).length;
+      const lowTrust = projectReports.filter((report) => report.scores.trust < 55).length;
+      const regressions = projectReports.filter((report) => report.compareHintPreviousId && (report.scores.clarity < 55 || report.scores.cta < 55 || report.scores.trust < 55)).length;
+      const strongest = projectReports
+        .slice()
+        .sort((a, b) => (b.scores.clarity + b.scores.cta + b.scores.trust + b.scores.seo) - (a.scores.clarity + a.scores.cta + a.scores.trust + a.scores.seo))[0];
+
+      return [project.id, { lowCta, lowTrust, regressions, strongest }];
+    }),
+  );
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-6 py-12 text-zinc-50">
@@ -22,25 +37,38 @@ export default async function ProjectsPage() {
         <section className="rounded-[2rem] border border-zinc-800/80 bg-zinc-900/55 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm">
           {projects.length ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {projects.map((project) => (
-                <Link
-                  key={project.id}
-                  href={`/projects/${project.id}`}
-                  className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.16)] transition hover:border-zinc-700 hover:bg-zinc-950/85"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-lg font-semibold text-white">{project.name}</h2>
-                    <span className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-400">{project.reportCount} reports</span>
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-zinc-400">
-                    <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Pages {project.pageCount}</span>
-                    <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Slug {project.slug}</span>
-                  </div>
-                  <p className="mt-4 text-xs text-zinc-500">
-                    {project.latestReportAt ? `Last report ${new Date(project.latestReportAt).toLocaleString("de-DE")}` : "No saved reports yet"}
-                  </p>
-                </Link>
-              ))}
+              {projects.map((project) => {
+                const insight = projectInsights.get(project.id);
+
+                return (
+                  <Link
+                    key={project.id}
+                    href={`/projects/${project.id}`}
+                    className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.16)] transition hover:border-zinc-700 hover:bg-zinc-950/85"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <h2 className="text-lg font-semibold text-white">{project.name}</h2>
+                      <span className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-400">{project.reportCount} reports</span>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-zinc-400">
+                      <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Pages {project.pageCount}</span>
+                      <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Weak CTA {insight?.lowCta ?? 0}</span>
+                      <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Trust gaps {insight?.lowTrust ?? 0}</span>
+                      <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Needs review {insight?.regressions ?? 0}</span>
+                    </div>
+                    {insight?.strongest ? (
+                      <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Strongest snapshot</p>
+                        <p className="mt-2 text-sm text-zinc-200">{insight.strongest.domain}</p>
+                        <p className="mt-1 text-xs text-zinc-500">Clarity {insight.strongest.scores.clarity} • CTA {insight.strongest.scores.cta} • Trust {insight.strongest.scores.trust}</p>
+                      </div>
+                    ) : null}
+                    <p className="mt-4 text-xs text-zinc-500">
+                      {project.latestReportAt ? `Last report ${new Date(project.latestReportAt).toLocaleString("de-DE")}` : "No saved reports yet"}
+                    </p>
+                  </Link>
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-3xl border border-dashed border-zinc-800 bg-zinc-950/60 p-10 text-center text-zinc-400">
