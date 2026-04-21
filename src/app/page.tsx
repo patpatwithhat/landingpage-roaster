@@ -238,7 +238,7 @@ export default function Home() {
 
     async function loadSession() {
       try {
-        const response = await fetch("/api/session");
+        const response = await fetch("/api/session", { cache: "no-store" });
         const payload = (await response.json()) as SessionPayload;
         if (!response.ok || cancelled) return;
         setSession(payload.session);
@@ -339,6 +339,9 @@ export default function Home() {
             <p className="mt-2 text-sm text-zinc-400">Analyze once, then explain it for the right person.</p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <div className={`inline-flex items-center rounded-full border px-4 py-2 text-sm ${session?.isAuthenticated ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-zinc-700 text-zinc-300"}`}>
+              {session?.isAuthenticated ? `Signed in as ${session.displayName}` : "Guest mode"}
+            </div>
             <a
               href="#analyze"
               className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
