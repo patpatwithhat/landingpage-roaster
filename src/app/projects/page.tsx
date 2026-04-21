@@ -28,9 +28,10 @@ export default async function ProjectsPage() {
         .slice()
         .sort((a, b) => (b.scores.clarity + b.scores.cta + b.scores.trust + b.scores.seo) - (a.scores.clarity + a.scores.cta + a.scores.trust + a.scores.seo))[0];
       const quickWins = projectReports.filter((report) => report.scores.cta < 55 || report.scores.trust < 55 || report.scores.clarity < 55).slice(0, 2);
+      const recentActivity = (projectRecord?.activity ?? []).slice(0, 2);
       const priority = regressions * 2 + lowCta + lowTrust + followUps;
 
-      return [project.id, { lowCta, lowTrust, regressions, strongest, quickWins, priority, followUps, inReview, resolved }];
+      return [project.id, { lowCta, lowTrust, regressions, strongest, quickWins, priority, followUps, inReview, resolved, recentActivity }];
     }),
   );
 
@@ -82,6 +83,22 @@ export default async function ProjectsPage() {
                       <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">In review {insight?.inReview ?? 0}</span>
                       <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Resolved {insight?.resolved ?? 0}</span>
                     </div>
+                    {insight?.recentActivity?.length ? (
+                      <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Recent activity</p>
+                        <div className="mt-2 grid gap-2">
+                          {insight.recentActivity.map((event) => (
+                            <div key={event.id} className="flex items-start justify-between gap-3 text-xs text-zinc-400">
+                              <div>
+                                <p className="text-zinc-200">{event.detail}</p>
+                                <p className="mt-1 line-clamp-1">{event.url}</p>
+                              </div>
+                              <span className="shrink-0 text-zinc-500">{new Date(event.createdAt).toLocaleDateString("de-DE")}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     {insight?.quickWins?.length ? (
                       <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3">
                         <p className="text-xs uppercase tracking-[0.18em] text-amber-300">Top quick wins</p>

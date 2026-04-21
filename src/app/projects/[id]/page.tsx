@@ -14,6 +14,7 @@ function priorityTone(priority: number) {
 }
 
 type FilterKey = "all" | "follow_up" | "in_review" | "resolved" | "regressions";
+type ActivityFilterKey = "all" | "reports" | "workflow";
 
 function filterLabel(filter: FilterKey) {
   switch (filter) {
@@ -30,18 +31,40 @@ function filterLabel(filter: FilterKey) {
   }
 }
 
+function activityFilterLabel(filter: ActivityFilterKey) {
+  switch (filter) {
+    case "reports":
+      return "Reports";
+    case "workflow":
+      return "Workflow";
+    default:
+      return "All activity";
+  }
+}
+
+function activityTone(type: "report_saved" | "page_status_changed") {
+  return type === "report_saved"
+    ? "border-sky-500/20 bg-sky-500/10 text-sky-300"
+    : "border-violet-500/20 bg-violet-500/10 text-violet-300";
+}
+
+function activityTypeLabel(type: "report_saved" | "page_status_changed") {
+  return type === "report_saved" ? "Report" : "Workflow";
+}
+
 export default async function ProjectPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; activity?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
   const activeFilter = (["all", "follow_up", "in_review", "resolved", "regressions"].includes(query.filter ?? "")
     ? query.filter
     : "all") as FilterKey;
+  const activeActivityFilter = (["all", "reports", "workflow"].includes(query.activity ?? "") ? query.activity : "all") as ActivityFilterKey;
 
   const project = await getProjectById(id);
 
@@ -105,7 +128,18 @@ export default async function ProjectPage({
   const quickWins = pages
     .filter((page) => page.latest.scores.cta < 55 || page.latest.scores.trust < 55 || page.latest.scores.clarity < 55)
     .slice(0, 3);
-  const activity = (project.activity ?? []).slice(0, 12);
+  const activity = (project.activity ?? [])
+    .filter((event) => {
+      switch (activeActivityFilter) {
+        case "reports":
+          return event.type === "report_saved";
+        case "workflow":
+          return event.type === "page_status_changed";
+        default:
+          return true;
+      }
+    })
+    .slice(0, 12);
   const filterCounts: Record<FilterKey, number> = {
     all: pages.length,
     follow_up: pages.filter((page) => page.workflowState === "follow_up").length,
@@ -115,6 +149,7 @@ export default async function ProjectPage({
   };
 
   const filters: FilterKey[] = ["all", "follow_up", "in_review", "resolved", "regressions"];
+  const activityFilters: ActivityFilterKey[] = ["all", "reports", "workflow"];
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-6 py-12 text-zinc-50">
@@ -248,6 +283,20 @@ export default async function ProjectPage({
               <h2 className="text-2xl font-semibold text-white">Activity</h2>
               <p className="mt-2 text-sm text-zinc-400">Recent workflow and reporting events across this project.</p>
             </div>
+            <div className="flex flex-wrap gap-2">
+              {activityFilters.map((filter) => {
+                const isActive = filter === activeActivityFilter;
+                return (
+                  <Link
+                    key={filter}
+                    href={`/projects/${project.id}?filter=${activeFilter}&activity=${filter}`}
+                    className={`rounded-full border px-3 py-1.5 text-xs transition ${isActive ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-zinc-700 text-zinc-200 hover:border-zinc-500 hover:bg-zinc-900"}`}
+                  >
+                    {activityFilterLabel(filter)}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
 
           <div className="mt-6 grid gap-3">
@@ -256,7 +305,10 @@ export default async function ProjectPage({
                 <div key={event.id} className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium text-white">{event.detail}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full border px-2.5 py-1 text-xs ${activityTone(event.type)}`}>{activityTypeLabel(event.type)}</span>
+                        <p className="text-sm font-medium text-white">{event.detail}</p>
+                      </div>
                       <p className="mt-1 text-sm text-zinc-400">{event.url}</p>
                     </div>
                     <p className="text-xs text-zinc-500">{new Date(event.createdAt).toLocaleString("de-DE")}</p>
