@@ -16,6 +16,12 @@ function deltaTone(delta: number) {
       : "border-zinc-700 bg-zinc-900 text-zinc-400";
 }
 
+function scoreDirection(delta: number) {
+  if (delta > 0) return "Improved";
+  if (delta < 0) return "Dropped";
+  return "Unchanged";
+}
+
 function uniqueDiff(current: string[], previous: string[]) {
   return current.filter((item) => !previous.includes(item));
 }
@@ -24,7 +30,17 @@ function sharedItems(left: string[], right: string[]) {
   return left.filter((item) => right.includes(item));
 }
 
-function CompareList({ title, items, emptyText, tone = "default" }: { title: string; items: string[]; emptyText: string; tone?: "default" | "good" | "bad" }) {
+function CompareList({
+  title,
+  items,
+  emptyText,
+  tone = "default",
+}: {
+  title: string;
+  items: string[];
+  emptyText: string;
+  tone?: "default" | "good" | "bad";
+}) {
   const toneClass =
     tone === "good"
       ? "border-emerald-500/20 bg-emerald-500/5"
@@ -97,6 +113,10 @@ export default async function ComparePage({
   const newlyIntroducedProblems = uniqueDiff(right.report.structuredAnalysis.problems, left.report.structuredAnalysis.problems);
   const resolvedProblems = uniqueDiff(left.report.structuredAnalysis.problems, right.report.structuredAnalysis.problems);
   const unchangedProblems = sharedItems(left.report.structuredAnalysis.problems, right.report.structuredAnalysis.problems);
+  const changedSignals = uniqueDiff(right.report.structuredAnalysis.rawPageSignals, left.report.structuredAnalysis.rawPageSignals);
+
+  const totalPositive = scoreItems.filter((item) => item.current > item.previous).length;
+  const totalNegative = scoreItems.filter((item) => item.current < item.previous).length;
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-6 py-12 text-zinc-50">
@@ -107,47 +127,72 @@ export default async function ComparePage({
             <h1 className="mt-3 text-3xl font-semibold text-white">{right.domain}</h1>
             <p className="mt-2 text-sm text-zinc-400">Review two saved snapshots side by side with score deltas, changed findings, and rewrite shifts.</p>
           </div>
-          <Link href={`/reports/${right.id}`} className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
-            Back to report
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link href={`/reports/${left.id}`} className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
+              Open previous
+            </Link>
+            <Link href={`/reports/${right.id}`} className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
+              Open current
+            </Link>
+          </div>
         </div>
 
-        <section className="grid gap-6 rounded-[2rem] border border-zinc-800/80 bg-zinc-900/55 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm lg:grid-cols-3">
-          <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5">
-            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Previous</p>
-            <p className="mt-3 text-sm text-zinc-200">{new Date(left.updatedAt).toLocaleString("de-DE")}</p>
-            <p className="mt-2 text-xs text-zinc-500">{left.report.outputTone} • {left.report.contentHash.slice(0, 8)}</p>
-          </div>
-          <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-5">
-            <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">Score delta</p>
-            <div className="mt-4 grid gap-2">
-              {scoreItems.map((item) => {
-                const delta = item.current - item.previous;
-                return (
-                  <div key={item.key} className="flex items-center justify-between rounded-2xl border border-zinc-800/80 bg-zinc-950/60 px-3 py-2 text-sm">
-                    <span className="text-zinc-300">{item.label}</span>
-                    <span className={`rounded-full border px-2 py-0.5 text-xs ${deltaTone(delta)}`}>{scoreDelta(item.current, item.previous)}</span>
-                  </div>
-                );
-              })}
+        <section className="grid gap-6 rounded-[2rem] border border-zinc-800/80 bg-zinc-900/55 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm lg:grid-cols-[0.85fr_1.15fr]">
+          <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6">
+            <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">Compare summary</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Improved areas</p>
+                <p className="mt-2 text-3xl font-semibold text-white">{totalPositive}</p>
+              </div>
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Dropped areas</p>
+                <p className="mt-2 text-3xl font-semibold text-white">{totalNegative}</p>
+              </div>
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Resolved issues</p>
+                <p className="mt-2 text-3xl font-semibold text-white">{resolvedProblems.length}</p>
+              </div>
             </div>
+            <p className="mt-4 text-sm leading-7 text-zinc-400">
+              Compare the older and newer snapshot to see where the page improved, where it regressed, and which recommendations still carry forward.
+            </p>
           </div>
-          <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5">
-            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Current</p>
-            <p className="mt-3 text-sm text-zinc-200">{new Date(right.updatedAt).toLocaleString("de-DE")}</p>
-            <p className="mt-2 text-xs text-zinc-500">{right.report.outputTone} • {right.report.contentHash.slice(0, 8)}</p>
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {scoreItems.map((item) => {
+              const delta = item.current - item.previous;
+              return (
+                <div key={item.key} className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5">
+                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">{item.label}</p>
+                  <div className="mt-3 flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-zinc-500">{item.previous} → {item.current}</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{scoreDirection(delta)}</p>
+                    </div>
+                    <span className={`rounded-full border px-2.5 py-1 text-xs ${deltaTone(delta)}`}>{scoreDelta(item.current, item.previous)}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6">
             <h2 className="text-lg font-semibold text-white">Verdict shift</h2>
-            <p className="mt-4 text-sm leading-7 text-zinc-500">Before</p>
-            <p className="mt-2 text-sm leading-7 text-zinc-400">{left.report.structuredAnalysis.verdict}</p>
-            <div className="my-4 h-px bg-zinc-800" />
-            <p className="text-sm leading-7 text-zinc-500">After</p>
-            <p className="mt-2 text-sm leading-7 text-zinc-200">{right.report.structuredAnalysis.verdict}</p>
+            <div className="mt-4 grid gap-4">
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Previous</p>
+                <p className="mt-3 text-sm leading-7 text-zinc-400">{left.report.structuredAnalysis.verdict}</p>
+              </div>
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Current</p>
+                <p className="mt-3 text-sm leading-7 text-zinc-200">{right.report.structuredAnalysis.verdict}</p>
+              </div>
+            </div>
           </div>
+
           <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6">
             <h2 className="text-lg font-semibold text-white">Rewrite shift</h2>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -194,6 +239,27 @@ export default async function ComparePage({
             items={improvedFixes}
             emptyText="No distinctly new fix lines appeared in the current snapshot."
           />
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-2">
+          <CompareList
+            title="New page signals"
+            items={changedSignals}
+            emptyText="No clearly new page signals showed up in the current snapshot."
+          />
+          <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6">
+            <h2 className="text-lg font-semibold text-white">Snapshot dates</h2>
+            <div className="mt-4 grid gap-3">
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Previous snapshot</p>
+                <p className="mt-2 text-sm text-zinc-200">{new Date(left.updatedAt).toLocaleString("de-DE")}</p>
+              </div>
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Current snapshot</p>
+                <p className="mt-2 text-sm text-zinc-200">{new Date(right.updatedAt).toLocaleString("de-DE")}</p>
+              </div>
+            </div>
+          </div>
         </section>
       </div>
     </main>
