@@ -337,7 +337,7 @@ export default function Home() {
             </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {recentReports.map((report) => (
-                <a
+                <Link
                   key={report.id}
                   href={`/reports/${report.id}`}
                   className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.16)] transition hover:border-zinc-700 hover:bg-zinc-950/85"
@@ -356,7 +356,7 @@ export default function Home() {
                     <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Trust {report.scores.trust}</span>
                     <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">SEO {report.scores.seo}</span>
                   </div>
-                </a>
+                </Link>
               ))}
             </div>
           </section>
@@ -448,12 +448,12 @@ export default function Home() {
                     {savedReportId ? "Saved" : isSaving ? "Saving..." : "Save report"}
                   </button>
                   {savedReportId ? (
-                    <a
+                    <Link
                       href={`/reports/${savedReportId}`}
                       className="inline-flex rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
                     >
                       Open saved report
-                    </a>
+                    </Link>
                   ) : null}
                 </div>
               </div>
@@ -463,12 +463,12 @@ export default function Home() {
                 <p className="mt-3 text-sm leading-6 text-zinc-400">
                   The full bucket-by-bucket and criterion-by-criterion breakdown now lives on a separate page, so this main report can stay focused.
                 </p>
-                <a
+                <Link
                   href={`/breakdown?url=${encodeURIComponent(result.analyzedUrl)}&tone=${result.outputTone}&mode=${result.mode}`}
                   className="mt-5 inline-flex rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
                 >
                   View scoring breakdown
-                </a>
+                </Link>
               </div>
 
               <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">

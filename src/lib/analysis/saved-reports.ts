@@ -19,6 +19,12 @@ export type SavedReportSummary = {
   scores: AuditResult["structuredAnalysis"]["scores"];
   createdAt: string;
   updatedAt: string;
+  compareHintPreviousId?: string;
+};
+
+export type SavedReportGroup = {
+  domain: string;
+  reports: SavedReportSummary[];
 };
 
 export type SavedReportRecord = SavedReportSummary & {
@@ -147,6 +153,23 @@ function sortNewestFirst(items: SavedReportSummary[]) {
   return [...items].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 }
 
+function withCompareHints(items: SavedReportSummary[]) {
+  return items.map((item) => {
+    const previous = items.find(
+      (candidate) =>
+        candidate.id !== item.id &&
+        candidate.domain === item.domain &&
+        candidate.analyzedUrl === item.analyzedUrl &&
+        Date.parse(candidate.updatedAt) < Date.parse(item.updatedAt),
+    );
+
+    return {
+      ...item,
+      compareHintPreviousId: previous?.id,
+    };
+  });
+}
+
 export async function saveReport(report: AuditResult) {
   if (!getSupabaseConfig()) {
     throw new Error("Missing Supabase config for saved reports.");
@@ -180,9 +203,22 @@ export async function saveReport(report: AuditResult) {
 }
 
 export async function listSavedReports(input?: { limit?: number; domain?: string }) {
-  const index = sortNewestFirst(await loadIndex());
+  const index = withCompareHints(sortNewestFirst(await loadIndex()));
   const filtered = input?.domain ? index.filter((item) => item.domain === input.domain) : index;
   return typeof input?.limit === "number" ? filtered.slice(0, input.limit) : filtered;
+}
+
+export async function listSavedReportGroups() {
+  const reports = await listSavedReports();
+  const groups = new Map<string, SavedReportSummary[]>();
+
+  for (const report of reports) {
+    const existing = groups.get(report.domain) ?? [];
+    existing.push(report);
+    groups.set(report.domain, existing);
+  }
+
+  return Array.from(groups.entries()).map(([domain, reports]) => ({ domain, reports })) satisfies SavedReportGroup[];
 }
 
 export async function getSavedReportById(id: string) {

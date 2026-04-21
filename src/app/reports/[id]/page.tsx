@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getSavedReportById } from "@/lib/analysis/saved-reports";
+import { getSavedReportById, listSavedReports } from "@/lib/analysis/saved-reports";
 import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
 
 function scoreTone(score: number) {
@@ -25,6 +25,9 @@ export default async function SavedReportPage({ params }: { params: Promise<{ id
   const result = saved.report;
   const profile = toneProfiles[result.outputTone];
   const buckets = result.structuredAnalysis.buckets;
+  const relatedReports = (await listSavedReports({ domain: saved.domain }))
+    .filter((report) => report.analyzedUrl === saved.analyzedUrl && report.id !== saved.id)
+    .slice(0, 4);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-6 py-12 text-zinc-50">
@@ -39,6 +42,14 @@ export default async function SavedReportPage({ params }: { params: Promise<{ id
             <Link href="/reports" className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
               All saved reports
             </Link>
+            {saved.compareHintPreviousId ? (
+              <Link
+                href={`/reports/compare?left=${saved.compareHintPreviousId}&right=${saved.id}`}
+                className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300 transition hover:border-emerald-400/40 hover:bg-emerald-500/15"
+              >
+                Compare with previous
+              </Link>
+            ) : null}
             <Link
               href={`/breakdown?url=${encodeURIComponent(result.analyzedUrl)}&tone=${result.outputTone}&mode=${result.mode}`}
               className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
@@ -84,6 +95,30 @@ export default async function SavedReportPage({ params }: { params: Promise<{ id
           </div>
 
           <div className="grid gap-4">
+            {relatedReports.length ? (
+              <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
+                <h3 className="text-lg font-semibold text-white">Timeline</h3>
+                <p className="mt-2 text-sm text-zinc-400">Earlier and nearby snapshots for this exact page, ready for compare mode.</p>
+                <div className="mt-4 grid gap-3">
+                  {relatedReports.map((report) => (
+                    <div key={report.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-3">
+                      <div>
+                        <p className="text-sm text-zinc-200">{new Date(report.updatedAt).toLocaleString("de-DE")}</p>
+                        <p className="mt-1 text-xs text-zinc-500">{toneProfiles[report.outputTone].label} • {report.contentHash.slice(0, 8)}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Link href={`/reports/${report.id}`} className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
+                          Open
+                        </Link>
+                        <Link href={`/reports/compare?left=${report.id}&right=${saved.id}`} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300 transition hover:border-emerald-400/40 hover:bg-emerald-500/15">
+                          Compare
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
                 <h3 className="text-lg font-semibold text-white">{profile.problemsLabel}</h3>
