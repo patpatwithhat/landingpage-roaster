@@ -13,8 +13,36 @@ function priorityTone(priority: number) {
   return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
 }
 
-export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
+type FilterKey = "all" | "follow_up" | "in_review" | "resolved" | "regressions";
+
+function filterLabel(filter: FilterKey) {
+  switch (filter) {
+    case "follow_up":
+      return "Follow-up";
+    case "in_review":
+      return "In review";
+    case "resolved":
+      return "Resolved";
+    case "regressions":
+      return "Regressions";
+    default:
+      return "All";
+  }
+}
+
+export default async function ProjectPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ filter?: string }>;
+}) {
   const { id } = await params;
+  const query = await searchParams;
+  const activeFilter = (["all", "follow_up", "in_review", "resolved", "regressions"].includes(query.filter ?? "")
+    ? query.filter
+    : "all") as FilterKey;
+
   const project = await getProjectById(id);
 
   if (!project) notFound();
@@ -55,6 +83,21 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     })
     .sort((a, b) => b.priority - a.priority || (b.delta ?? 0) - (a.delta ?? 0));
 
+  const filteredPages = pages.filter((page) => {
+    switch (activeFilter) {
+      case "follow_up":
+        return page.workflowState === "follow_up";
+      case "in_review":
+        return page.workflowState === "in_review";
+      case "resolved":
+        return page.workflowState === "resolved";
+      case "regressions":
+        return (page.delta ?? 0) < 0;
+      default:
+        return true;
+    }
+  });
+
   const needsReviewCount = pages.filter((page) => page.needsReview).length;
   const improvedCount = pages.filter((page) => (page.delta ?? 0) > 0).length;
   const regressedCount = pages.filter((page) => (page.delta ?? 0) < 0).length;
@@ -62,6 +105,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const quickWins = pages
     .filter((page) => page.latest.scores.cta < 55 || page.latest.scores.trust < 55 || page.latest.scores.clarity < 55)
     .slice(0, 3);
+  const filterCounts: Record<FilterKey, number> = {
+    all: pages.length,
+    follow_up: pages.filter((page) => page.workflowState === "follow_up").length,
+    in_review: pages.filter((page) => page.workflowState === "in_review").length,
+    resolved: pages.filter((page) => page.workflowState === "resolved").length,
+    regressions: pages.filter((page) => (page.delta ?? 0) < 0).length,
+  };
+
+  const filters: FilterKey[] = ["all", "follow_up", "in_review", "resolved", "regressions"];
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-6 py-12 text-zinc-50">
@@ -195,10 +247,24 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
               <h2 className="text-2xl font-semibold text-white">Project overview</h2>
               <p className="mt-2 text-sm text-zinc-400">See which pages improved, which still need work, and where to jump into report history or compare.</p>
             </div>
+            <div className="flex flex-wrap gap-2">
+              {filters.map((filter) => {
+                const isActive = filter === activeFilter;
+                return (
+                  <Link
+                    key={filter}
+                    href={`/projects/${project.id}?filter=${filter}`}
+                    className={`rounded-full border px-3 py-1.5 text-xs transition ${isActive ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-zinc-700 text-zinc-200 hover:border-zinc-500 hover:bg-zinc-900"}`}
+                  >
+                    {filterLabel(filter)} {filterCounts[filter]}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
 
           <div className="mt-6 grid gap-4">
-            {pages.map((page) => (
+            {filteredPages.map((page) => (
               <div key={page.url} className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
@@ -264,9 +330,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
             ))}
-            {!pages.length ? (
+            {!filteredPages.length ? (
               <div className="rounded-3xl border border-dashed border-zinc-800 bg-zinc-950/60 p-10 text-center text-zinc-400">
-                No reports in this project yet. Save an analysis into this project from the main analyzer.
+                No pages match the current filter.
               </div>
             ) : null}
           </div>
