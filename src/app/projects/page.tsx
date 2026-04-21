@@ -3,6 +3,10 @@ import Link from "next/link";
 import { listProjects } from "@/lib/analysis/projects";
 import { listSavedReports } from "@/lib/analysis/saved-reports";
 
+function healthTone(count: number) {
+  return count > 0 ? "text-amber-300" : "text-emerald-300";
+}
+
 export default async function ProjectsPage() {
   const [projects, reports] = await Promise.all([listProjects(), listSavedReports()]);
 
@@ -15,10 +19,14 @@ export default async function ProjectsPage() {
       const strongest = projectReports
         .slice()
         .sort((a, b) => (b.scores.clarity + b.scores.cta + b.scores.trust + b.scores.seo) - (a.scores.clarity + a.scores.cta + a.scores.trust + a.scores.seo))[0];
+      const quickWins = projectReports.filter((report) => report.scores.cta < 55 || report.scores.trust < 55 || report.scores.clarity < 55).slice(0, 2);
+      const priority = regressions * 2 + lowCta + lowTrust;
 
-      return [project.id, { lowCta, lowTrust, regressions, strongest }];
+      return [project.id, { lowCta, lowTrust, regressions, strongest, quickWins, priority }];
     }),
   );
+
+  const sortedProjects = [...projects].sort((a, b) => (projectInsights.get(b.id)?.priority ?? 0) - (projectInsights.get(a.id)?.priority ?? 0));
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-6 py-12 text-zinc-50">
@@ -35,9 +43,9 @@ export default async function ProjectsPage() {
         </div>
 
         <section className="rounded-[2rem] border border-zinc-800/80 bg-zinc-900/55 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm">
-          {projects.length ? (
+          {sortedProjects.length ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {projects.map((project) => {
+              {sortedProjects.map((project) => {
                 const insight = projectInsights.get(project.id);
 
                 return (
@@ -50,13 +58,27 @@ export default async function ProjectsPage() {
                       <h2 className="text-lg font-semibold text-white">{project.name}</h2>
                       <span className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-400">{project.reportCount} reports</span>
                     </div>
+                    <div className="mt-4 flex items-center gap-2 text-xs">
+                      <span className={`rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1 ${healthTone(insight?.priority ?? 0)}`}>
+                        {(insight?.priority ?? 0) > 0 ? `priority ${insight?.priority}` : "stable"}
+                      </span>
+                    </div>
                     <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-zinc-400">
                       <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Pages {project.pageCount}</span>
                       <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Weak CTA {insight?.lowCta ?? 0}</span>
                       <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Trust gaps {insight?.lowTrust ?? 0}</span>
                       <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Needs review {insight?.regressions ?? 0}</span>
                     </div>
-                    {insight?.strongest ? (
+                    {insight?.quickWins?.length ? (
+                      <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-amber-300">Top quick wins</p>
+                        <ul className="mt-2 space-y-2 text-sm text-zinc-300">
+                          {insight.quickWins.map((report) => (
+                            <li key={report.id}>{report.analyzedUrl}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : insight?.strongest ? (
                       <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
                         <p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Strongest snapshot</p>
                         <p className="mt-2 text-sm text-zinc-200">{insight.strongest.domain}</p>
