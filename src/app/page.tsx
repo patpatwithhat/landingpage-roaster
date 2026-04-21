@@ -2,8 +2,11 @@
 
 import { FormEvent, useEffect, useId, useState } from "react";
 
+import Link from "next/link";
+
 import { analysisProfiles } from "@/lib/analysis/profiles/analysisProfiles";
 import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
+import type { SavedReportSummary } from "@/lib/analysis/saved-reports";
 import type { AuditResult, CriterionAssessment, OutputTone, ScoreBucketResult } from "@/lib/analysis/schema";
 
 function scoreTone(score: number) {
@@ -98,6 +101,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [outputTone, setOutputTone] = useState<OutputTone>(defaultOutputProfile.key);
+  const [recentReports, setRecentReports] = useState<SavedReportSummary[]>([]);
+  const [savedReportId, setSavedReportId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   async function runAnalysis(nextUrl: string, nextOutputTone: OutputTone) {
     setIsLoading(true);
@@ -125,6 +131,7 @@ export default function Home() {
       setResult(payload.result);
       setUrl(nextUrl.trim());
       setOutputTone(nextOutputTone);
+      setSavedReportId(null);
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : "Analysis failed.";
       setError(message);
@@ -158,6 +165,56 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [result, isLoading]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRecentReports() {
+      try {
+        const response = await fetch("/api/reports?limit=6");
+        const payload = (await response.json()) as { reports?: SavedReportSummary[] };
+        if (!response.ok || !payload.reports || cancelled) return;
+        setRecentReports(payload.reports);
+      } catch {
+        if (!cancelled) setRecentReports([]);
+      }
+    }
+
+    void loadRecentReports();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [savedReportId]);
+
+  async function handleSaveReport() {
+    if (!result || isSaving) return;
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/reports/save", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ report: result }),
+      });
+
+      const payload = (await response.json()) as { report?: SavedReportSummary; error?: string };
+
+      if (!response.ok || !payload.report) {
+        throw new Error(payload.error ?? "Could not save report.");
+      }
+
+      setSavedReportId(payload.report.id);
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : "Could not save report.";
+      setError(message);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   const buckets = result?.structuredAnalysis.buckets ?? [];
   const scores = result?.structuredAnalysis.scores;
   const selectedOutputProfile = toneProfiles[outputTone];
@@ -171,12 +228,20 @@ export default function Home() {
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">Landingpage Roaster</p>
             <p className="mt-2 text-sm text-zinc-400">Analyze once, then explain it for the right person.</p>
           </div>
-          <a
-            href="#analyze"
-            className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
-          >
-            Go analyze
-          </a>
+          <div className="flex flex-wrap gap-3">
+            <a
+              href="#analyze"
+              className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
+            >
+              Go analyze
+            </a>
+            <Link
+              href="/reports"
+              className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
+            >
+              Saved reports
+            </Link>
+          </div>
         </header>
 
         <section className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
@@ -238,6 +303,12 @@ export default function Home() {
                   ))}
                 </ul>
               </div>
+              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 text-sm text-zinc-400 backdrop-blur-sm">
+                <p className="font-medium text-zinc-200">Saved reports</p>
+                <p className="mt-2 leading-6">
+                  Save strong runs, reopen them later, and build up the history layer that compare mode will use next.
+                </p>
+              </div>
               <button
                 type="submit"
                 disabled={isLoading}
@@ -252,6 +323,44 @@ export default function Home() {
             {error ? <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">{error}</div> : null}
           </div>
         </section>
+
+        {recentReports.length ? (
+          <section className="grid gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">Saved reports</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Recent history</h2>
+              </div>
+              <Link href="/reports" className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
+                View all
+              </Link>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {recentReports.map((report) => (
+                <a
+                  key={report.id}
+                  href={`/reports/${report.id}`}
+                  className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.16)] transition hover:border-zinc-700 hover:bg-zinc-950/85"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-base font-semibold text-white">{report.domain}</h3>
+                    <span className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-400">
+                      {toneProfiles[report.outputTone].label}
+                    </span>
+                  </div>
+                  <p className="mt-2 line-clamp-2 text-sm text-zinc-400">{report.analyzedUrl}</p>
+                  <p className="mt-3 text-xs text-zinc-500">{new Date(report.updatedAt).toLocaleString("de-DE")}</p>
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-zinc-400">
+                    <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Clarity {report.scores.clarity}</span>
+                    <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">CTA {report.scores.cta}</span>
+                    <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Trust {report.scores.trust}</span>
+                    <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">SEO {report.scores.seo}</span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {result ? (
           <section className="grid gap-6 rounded-[2rem] border border-zinc-800/80 bg-zinc-900/55 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm lg:grid-cols-[0.9fr_1.1fr]">
@@ -321,6 +430,31 @@ export default function Home() {
                       </li>
                     ))}
                   </ol>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
+                <h3 className="text-lg font-semibold text-white">Saved report</h3>
+                <p className="mt-3 text-sm leading-6 text-zinc-400">
+                  Save this analysis so you can reopen it later, build history, and prepare for before-vs-after compare mode.
+                </p>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleSaveReport}
+                    disabled={!result || isSaving || Boolean(savedReportId)}
+                    className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {savedReportId ? "Saved" : isSaving ? "Saving..." : "Save report"}
+                  </button>
+                  {savedReportId ? (
+                    <a
+                      href={`/reports/${savedReportId}`}
+                      className="inline-flex rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
+                    >
+                      Open saved report
+                    </a>
+                  ) : null}
                 </div>
               </div>
 
