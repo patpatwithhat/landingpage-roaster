@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import type { AuditResult } from "./schema";
+import type { AuditResult, CoreAnalysis, OutputTone } from "./schema";
 
 const REPORT_BUCKET = "landingpage-roaster-reports";
 let bucketEnsured = false;
@@ -16,16 +16,24 @@ function getSupabaseConfig() {
   return { url, secret };
 }
 
-function buildObjectPath(normalizedUrl: string, analysisVersion: string, contentHash: string, outputTone: AuditResult["outputTone"]) {
+function buildBasePath(normalizedUrl: string, analysisVersion: string, contentHash: string) {
   const urlHash = createHash("sha256").update(normalizedUrl).digest("hex");
-  return `${analysisVersion}/${outputTone}/${urlHash}/${contentHash}.json`;
+  return `${analysisVersion}/${urlHash}/${contentHash}`;
+}
+
+function buildCoreObjectPath(normalizedUrl: string, analysisVersion: string, contentHash: string) {
+  return `${buildBasePath(normalizedUrl, analysisVersion, contentHash)}/core.json`;
+}
+
+function buildPresentationObjectPath(normalizedUrl: string, analysisVersion: string, contentHash: string, outputTone: OutputTone) {
+  return `${buildBasePath(normalizedUrl, analysisVersion, contentHash)}/presentation-${outputTone}.json`;
 }
 
 async function supabaseRequest(path: string, init?: RequestInit) {
   const config = getSupabaseConfig();
   if (!config) return null;
 
-  const response = await fetch(`${config.url}${path}`, {
+  return fetch(`${config.url}${path}`, {
     ...init,
     headers: {
       apikey: config.secret,
@@ -34,8 +42,6 @@ async function supabaseRequest(path: string, init?: RequestInit) {
     },
     cache: "no-store",
   });
-
-  return response;
 }
 
 async function ensureBucket() {
@@ -70,53 +76,79 @@ async function ensureBucket() {
   bucketEnsured = true;
 }
 
-export async function loadStoredReport(input: {
-  normalizedUrl: string;
-  analysisVersion: string;
-  contentHash: string;
-  outputTone: AuditResult["outputTone"];
-}) {
-  const config = getSupabaseConfig();
-  if (!config) return null;
-
-  await ensureBucket();
-
-  const objectPath = buildObjectPath(input.normalizedUrl, input.analysisVersion, input.contentHash, input.outputTone);
+async function loadObject<T>(objectPath: string) {
   const response = await supabaseRequest(`/storage/v1/object/${REPORT_BUCKET}/${objectPath}`);
 
-  if (!response) {
-    return null;
-  }
-
+  if (!response) return null;
   if (!response.ok) {
     const text = await response.text();
-    if (response.status === 404 || text.includes('Object not found') || text.includes('not_found')) {
+    if (response.status === 404 || text.includes("Object not found") || text.includes("not_found")) {
       return null;
     }
-    throw new Error(`Could not load cached report (${response.status}): ${text.slice(0, 200)}`);
+    throw new Error(`Could not load cached report object (${response.status}): ${text.slice(0, 200)}`);
   }
 
-  return (await response.json()) as AuditResult;
+  return (await response.json()) as T;
 }
 
-export async function storeReport(report: AuditResult) {
-  const config = getSupabaseConfig();
-  if (!config) return;
-
-  await ensureBucket();
-
-  const objectPath = buildObjectPath(report.analyzedUrl, report.analysisVersion, report.contentHash, report.outputTone);
+async function storeObject(objectPath: string, value: unknown) {
   const response = await supabaseRequest(`/storage/v1/object/${REPORT_BUCKET}/${objectPath}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "x-upsert": "true",
     },
-    body: JSON.stringify(report),
+    body: JSON.stringify(value),
   });
 
   if (!response?.ok) {
     const text = await response?.text();
-    throw new Error(`Could not store report (${response?.status}): ${text?.slice(0, 200)}`);
+    throw new Error(`Could not store report object (${response?.status}): ${text?.slice(0, 200)}`);
   }
+}
+
+export async function loadStoredCoreAnalysis(input: {
+  normalizedUrl: string;
+  analysisVersion: string;
+  contentHash: string;
+}) {
+  const config = getSupabaseConfig();
+  if (!config) return null;
+
+  await ensureBucket();
+  return loadObject<CoreAnalysis>(buildCoreObjectPath(input.normalizedUrl, input.analysisVersion, input.contentHash));
+}
+
+export async function storeCoreAnalysis(input: {
+  normalizedUrl: string;
+  analysisVersion: string;
+  contentHash: string;
+  coreAnalysis: CoreAnalysis;
+}) {
+  const config = getSupabaseConfig();
+  if (!config) return;
+
+  await ensureBucket();
+  await storeObject(buildCoreObjectPath(input.normalizedUrl, input.analysisVersion, input.contentHash), input.coreAnalysis);
+}
+
+export async function loadStoredPresentation(input: {
+  normalizedUrl: string;
+  analysisVersion: string;
+  contentHash: string;
+  outputTone: OutputTone;
+}) {
+  const config = getSupabaseConfig();
+  if (!config) return null;
+
+  await ensureBucket();
+  return loadObject<AuditResult>(buildPresentationObjectPath(input.normalizedUrl, input.analysisVersion, input.contentHash, input.outputTone));
+}
+
+export async function storePresentation(report: AuditResult) {
+  const config = getSupabaseConfig();
+  if (!config) return;
+
+  await ensureBucket();
+  await storeObject(buildPresentationObjectPath(report.analyzedUrl, report.analysisVersion, report.contentHash, report.outputTone), report);
 }

@@ -42,6 +42,12 @@ export type StructuredAnalysis = {
   scores: AuditScores;
 };
 
+export type CoreAnalysis = {
+  rawPageSignals: string[];
+  buckets: ScoreBucketResult[];
+  scores: AuditScores;
+};
+
 export type AuditResult = {
   domain: string;
   analyzedUrl: string;
@@ -53,6 +59,17 @@ export type AuditResult = {
   structuredAnalysis: StructuredAnalysis;
 };
 
+export type PresentationPayload = {
+  verdict?: unknown;
+  summary?: unknown;
+  problems?: unknown;
+  fixes?: unknown;
+  rewrites?: {
+    hero?: unknown;
+    cta?: unknown;
+  };
+};
+
 export type RawCriterionPayload = {
   status?: unknown;
   confidence?: unknown;
@@ -61,15 +78,7 @@ export type RawCriterionPayload = {
 };
 
 export type RawAuditPayload = {
-  verdict?: unknown;
-  summary?: unknown;
   rawPageSignals?: unknown;
-  problems?: unknown;
-  fixes?: unknown;
-  rewrites?: {
-    hero?: unknown;
-    cta?: unknown;
-  };
   buckets?: Record<string, Record<string, RawCriterionPayload>>;
 };
 
@@ -90,17 +99,22 @@ export function sanitizeText(value: unknown, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
-export function sanitizeRawAnalysis(payload: RawAuditPayload) {
+export function sanitizeCoreAnalysis(payload: RawAuditPayload) {
+  return {
+    rawPageSignals: sanitizeList(payload.rawPageSignals, SIGNAL_LIMIT),
+    buckets: payload.buckets,
+  };
+}
+
+export function sanitizePresentation(payload: PresentationPayload) {
   return {
     verdict: sanitizeText(payload.verdict, "No verdict returned."),
     summary: sanitizeText(payload.summary),
-    rawPageSignals: sanitizeList(payload.rawPageSignals, SIGNAL_LIMIT),
     problems: ensureLength(sanitizeList(payload.problems, LIST_LIMIT), LIST_LIMIT),
     fixes: ensureLength(sanitizeList(payload.fixes, LIST_LIMIT), LIST_LIMIT),
     rewrites: {
       hero: sanitizeText(payload.rewrites?.hero),
       cta: sanitizeText(payload.rewrites?.cta),
     },
-    buckets: payload.buckets,
   };
 }

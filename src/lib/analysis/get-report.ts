@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 
 import { ANALYSIS_VERSION, MAX_TEXT_CHARS } from "./config";
-import { analyzeWithOpenAI } from "./openai";
+import { analyzeCoreWithOpenAI, presentAnalysisWithOpenAI } from "./openai";
 import { fetchPage, normalizeUrl, stripHtml, extractTitle, extractMetaDescription, extractHeadings, buildUserPrompt } from "./page";
 import { analysisProfiles } from "./profiles/analysisProfiles";
-import { loadStoredReport, storeReport } from "./report-store";
+import { loadStoredCoreAnalysis, loadStoredPresentation, storeCoreAnalysis, storePresentation } from "./report-store";
 import { buildBucketResults, getTopLevelScores } from "./scoring";
-import { sanitizeRawAnalysis, type AnalysisMode, type AuditResult, type OutputTone } from "./schema";
+import { sanitizeCoreAnalysis, sanitizePresentation, type AnalysisMode, type AuditResult, type CoreAnalysis, type OutputTone } from "./schema";
 
 export async function getAnalysisReport(input: { url: string; mode?: AnalysisMode; outputTone?: OutputTone }) {
   const url = normalizeUrl(input.url);
@@ -24,37 +24,71 @@ export async function getAnalysisReport(input: { url: string; mode?: AnalysisMod
     .update([title, metaDescription, headings.join("|"), pageText].join("\n\n"))
     .digest("hex");
 
-  const cachedReport = await loadStoredReport({
+  const cachedPresentation = await loadStoredPresentation({
     normalizedUrl: url.toString(),
     analysisVersion: ANALYSIS_VERSION,
     contentHash,
     outputTone,
   });
 
-  if (cachedReport) {
+  if (cachedPresentation) {
     return {
-      ...cachedReport,
+      ...cachedPresentation,
       outputTone,
       reportSource: "cache",
     } satisfies AuditResult;
   }
 
-  const raw = await analyzeWithOpenAI({
-    outputTone,
-    modeInstructions: modeConfig.instructions,
-    userPrompt: buildUserPrompt({
-      url,
-      modeLabel: modeConfig.label,
-      analysisInstructions: modeConfig.instructions,
-      title,
-      metaDescription,
-      headings,
-      pageText,
-    }),
+  const cachedCore = await loadStoredCoreAnalysis({
+    normalizedUrl: url.toString(),
+    analysisVersion: ANALYSIS_VERSION,
+    contentHash,
   });
 
-  const sanitized = sanitizeRawAnalysis(raw);
-  const buckets = buildBucketResults(sanitized.buckets);
+  let resolvedCore: CoreAnalysis | null = cachedCore;
+
+  if (!cachedCore) {
+    const rawCore = await analyzeCoreWithOpenAI({
+      modeInstructions: modeConfig.instructions,
+      userPrompt: buildUserPrompt({
+        url,
+        modeLabel: modeConfig.label,
+        analysisInstructions: modeConfig.instructions,
+        title,
+        metaDescription,
+        headings,
+        pageText,
+      }),
+    });
+
+    const sanitizedCore = sanitizeCoreAnalysis(rawCore);
+    const buckets = buildBucketResults(sanitizedCore.buckets);
+    resolvedCore = {
+      rawPageSignals: sanitizedCore.rawPageSignals,
+      buckets,
+      scores: getTopLevelScores(buckets),
+    };
+
+    await storeCoreAnalysis({
+      normalizedUrl: url.toString(),
+      analysisVersion: ANALYSIS_VERSION,
+      contentHash,
+      coreAnalysis: resolvedCore,
+    });
+  }
+
+  if (!resolvedCore) {
+    throw new Error("Failed to build core analysis.");
+  }
+
+  const rawPresentation = await presentAnalysisWithOpenAI({
+    outputTone,
+    analyzedUrl: url.toString(),
+    domain: url.hostname,
+    coreAnalysis: resolvedCore,
+  });
+
+  const presentation = sanitizePresentation(rawPresentation);
   const result: AuditResult = {
     domain: url.hostname,
     analyzedUrl: url.toString(),
@@ -64,18 +98,18 @@ export async function getAnalysisReport(input: { url: string; mode?: AnalysisMod
     contentHash,
     reportSource: "fresh",
     structuredAnalysis: {
-      verdict: sanitized.verdict,
-      summary: sanitized.summary,
-      rawPageSignals: sanitized.rawPageSignals,
-      problems: sanitized.problems,
-      fixes: sanitized.fixes,
-      rewrites: sanitized.rewrites,
-      buckets,
-      scores: getTopLevelScores(buckets),
+      verdict: presentation.verdict,
+      summary: presentation.summary,
+      rawPageSignals: resolvedCore.rawPageSignals,
+      problems: presentation.problems,
+      fixes: presentation.fixes,
+      rewrites: presentation.rewrites,
+      buckets: resolvedCore.buckets,
+      scores: resolvedCore.scores,
     },
   };
 
-  await storeReport(result);
+  await storePresentation(result);
 
   return result;
 }
