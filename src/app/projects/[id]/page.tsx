@@ -69,11 +69,17 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <p className="mt-2 text-sm text-zinc-400">Keep the related pages, report history, and compare entry points for this project in one place.</p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <Link href={`/projects/${project.id}#triage`} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300 transition hover:border-emerald-400/40 hover:bg-emerald-500/15">
+              Open triage
+            </Link>
+            <Link href={`/projects/${project.id}#quick-wins`} className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
+              Open quick wins
+            </Link>
             <Link href="/projects" className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
               All projects
             </Link>
-            <Link href="/" className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
-              Analyze another page
+            <Link href={`/?project=${encodeURIComponent(project.name)}`} className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
+              Analyze into project
             </Link>
           </div>
         </div>
@@ -98,7 +104,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="rounded-[2rem] border border-zinc-800/80 bg-zinc-900/55 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm">
+          <div id="triage" className="rounded-[2rem] border border-zinc-800/80 bg-zinc-900/55 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-semibold text-white">Triage queue</h2>
@@ -120,6 +126,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                         <p className="mt-2 text-sm text-zinc-400">{page.quickWin}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
+                        <Link href={`/?url=${encodeURIComponent(page.url)}&tone=audit&project=${encodeURIComponent(project.name)}`} className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
+                          Re-run audit
+                        </Link>
                         <Link href={`/reports/${page.latest.id}`} className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
                           Open
                         </Link>
@@ -140,7 +149,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-zinc-800/80 bg-zinc-900/55 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm">
+          <div id="quick-wins" className="rounded-[2rem] border border-zinc-800/80 bg-zinc-900/55 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm">
             <h2 className="text-2xl font-semibold text-white">Quick wins</h2>
             <p className="mt-2 text-sm text-zinc-400">The easiest high-value next moves across this project.</p>
             <div className="mt-6 grid gap-3">
@@ -153,6 +162,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                       <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">CTA {page.latest.scores.cta}</span>
                       <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Trust {page.latest.scores.trust}</span>
                       <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Clarity {page.latest.scores.clarity}</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Link href={`/?url=${encodeURIComponent(page.url)}&tone=developer&project=${encodeURIComponent(project.name)}`} className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
+                        Re-run for developer
+                      </Link>
+                      <Link href={`/reports/${page.latest.id}`} className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
+                        Open latest
+                      </Link>
                     </div>
                   </div>
                 ))
@@ -194,6 +211,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                     <p className="mt-2 text-sm text-zinc-500">{page.reports.length} saved snapshots in this project</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <Link href={`/?url=${encodeURIComponent(page.url)}&tone=audit&project=${encodeURIComponent(project.name)}`} className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
+                      Re-run analysis
+                    </Link>
                     <Link href={`/reports/${page.latest.id}`} className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
                       Open latest report
                     </Link>

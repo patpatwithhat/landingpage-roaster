@@ -105,7 +105,10 @@ export default function Home() {
   const [recentReports, setRecentReports] = useState<SavedReportSummary[]>([]);
   const [savedReportId, setSavedReportId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [projectName, setProjectName] = useState("");
+  const [projectName, setProjectName] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("project") ?? "";
+  });
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
 
   async function runAnalysis(nextUrl: string, nextOutputTone: OutputTone) {
