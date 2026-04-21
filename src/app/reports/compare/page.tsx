@@ -64,7 +64,7 @@ export default async function ComparePage({
       <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-6 py-12 text-zinc-50">
         <div className="mx-auto max-w-4xl rounded-3xl border border-zinc-800/80 bg-zinc-900/60 p-8">
           <h1 className="text-3xl font-semibold text-white">Compare reports</h1>
-          <p className="mt-4 text-zinc-400">Missing compare ids. Open a saved report timeline and start compare from there.</p>
+          <p className="mt-4 text-zinc-400">Missing compare ids. Open a saved report timeline and choose two snapshots to compare.</p>
         </div>
       </main>
     );
@@ -105,7 +105,7 @@ export default async function ComparePage({
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">Compare reports</p>
             <h1 className="mt-3 text-3xl font-semibold text-white">{right.domain}</h1>
-            <p className="mt-2 text-sm text-zinc-400">Before vs after snapshot view with score deltas, changed findings, and rewrite shifts.</p>
+            <p className="mt-2 text-sm text-zinc-400">Review two saved snapshots side by side with score deltas, changed findings, and rewrite shifts.</p>
           </div>
           <Link href={`/reports/${right.id}`} className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
             Back to report
@@ -190,7 +190,7 @@ export default async function ComparePage({
             emptyText="No unchanged problem lines remained identical across both snapshots."
           />
           <CompareList
-            title="Current next fixes"
+            title="Current recommended fixes"
             items={improvedFixes}
             emptyText="No distinctly new fix lines appeared in the current snapshot."
           />

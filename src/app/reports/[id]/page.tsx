@@ -98,7 +98,7 @@ export default async function SavedReportPage({ params }: { params: Promise<{ id
             {relatedReports.length ? (
               <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
                 <h3 className="text-lg font-semibold text-white">Timeline</h3>
-                <p className="mt-2 text-sm text-zinc-400">Earlier and nearby snapshots for this exact page, ready for compare mode.</p>
+                <p className="mt-2 text-sm text-zinc-400">Earlier and nearby snapshots for this exact page, so you can review and compare key iterations.</p>
                 <div className="mt-4 grid gap-3">
                   {relatedReports.map((report) => (
                     <div key={report.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-3">

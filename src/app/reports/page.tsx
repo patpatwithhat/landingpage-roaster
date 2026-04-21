@@ -13,7 +13,7 @@ export default async function ReportsPage() {
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">Saved reports</p>
             <h1 className="mt-3 text-3xl font-semibold text-white">Report history</h1>
-            <p className="mt-2 text-sm text-zinc-400">Re-open older audits, track what was reviewed, and build toward compare mode.</p>
+            <p className="mt-2 text-sm text-zinc-400">Re-open older audits, track what was reviewed, and compare important iterations over time.</p>
           </div>
           <Link href="/" className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
             Back to analyzer
@@ -47,7 +47,7 @@ export default async function ReportsPage() {
                               </span>
                               {report.compareHintPreviousId ? (
                                 <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300">
-                                  compare-ready
+                                  previous version available
                                 </span>
                               ) : null}
                             </div>

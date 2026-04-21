@@ -306,7 +306,7 @@ export default function Home() {
               <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 text-sm text-zinc-400 backdrop-blur-sm">
                 <p className="font-medium text-zinc-200">Saved reports</p>
                 <p className="mt-2 leading-6">
-                  Save strong runs, reopen them later, and build up the history layer that compare mode will use next.
+                  Save analyses, reopen them later, and keep a clean history of how each page evolves over time.
                 </p>
               </div>
               <button
@@ -318,7 +318,7 @@ export default function Home() {
               </button>
             </form>
             <div className="mt-6 rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 text-sm text-zinc-400 backdrop-blur-sm">
-              Current architecture: fetch page → structured criteria assessment → deterministic score calculation → audience-specific explanation layer.
+              Analyze the page, score clear criteria, and turn the findings into an audience-appropriate report.
             </div>
             {error ? <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">{error}</div> : null}
           </div>
@@ -436,7 +436,7 @@ export default function Home() {
               <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
                 <h3 className="text-lg font-semibold text-white">Saved report</h3>
                 <p className="mt-3 text-sm leading-6 text-zinc-400">
-                  Save this analysis so you can reopen it later, build history, and prepare for before-vs-after compare mode.
+                  Save this analysis so you can reopen it later, keep a history of changes, and compare important iterations side by side.
                 </p>
                 <div className="mt-5 flex flex-wrap gap-3">
                   <button
@@ -461,7 +461,7 @@ export default function Home() {
               <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
                 <h3 className="text-lg font-semibold text-white">Detailed scoring breakdown</h3>
                 <p className="mt-3 text-sm leading-6 text-zinc-400">
-                  The full bucket-by-bucket and criterion-by-criterion breakdown now lives on a separate page, so this main report can stay focused.
+                  Open the full bucket-by-bucket and criterion-by-criterion breakdown when you want the detailed scoring view.
                 </p>
                 <Link
                   href={`/breakdown?url=${encodeURIComponent(result.analyzedUrl)}&tone=${result.outputTone}&mode=${result.mode}`}
