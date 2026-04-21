@@ -5,6 +5,8 @@ import { getProjectById } from "@/lib/analysis/projects";
 import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
 import { listSavedReports } from "@/lib/analysis/saved-reports";
 
+import { ProjectPageStatusActions } from "./project-actions";
+
 function priorityTone(priority: number) {
   if (priority >= 5) return "border-rose-500/20 bg-rose-500/10 text-rose-300";
   if (priority >= 3) return "border-amber-500/20 bg-amber-500/10 text-amber-300";
@@ -37,6 +39,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       const weakAreas = [latest.scores.cta < 55, latest.scores.trust < 55, latest.scores.clarity < 55].filter(Boolean).length;
       const priority = weakAreas + (delta !== null && delta < 0 ? 2 : 0) + (latest.scores.cta < 40 ? 1 : 0);
       const quickWin = latest.scores.cta < 55 ? "Clarify and strengthen the primary CTA" : latest.scores.trust < 55 ? "Add stronger proof and credibility signals" : latest.scores.clarity < 55 ? "Tighten messaging and audience clarity" : "Keep iterating from the current strongest snapshot";
+      const workflowState = project.pageStates?.[url]?.status ?? "none";
 
       return {
         url,
@@ -47,6 +50,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         needsReview,
         priority,
         quickWin,
+        workflowState,
       };
     })
     .sort((a, b) => b.priority - a.priority || (b.delta ?? 0) - (a.delta ?? 0));
@@ -124,6 +128,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                           <span className={`rounded-full border px-2.5 py-1 text-xs ${priorityTone(page.priority)}`}>priority {page.priority}</span>
                         </div>
                         <p className="mt-2 text-sm text-zinc-400">{page.quickWin}</p>
+                        <div className="mt-3">
+                          <ProjectPageStatusActions projectId={project.id} url={page.url} status={page.workflowState} />
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Link href={`/?url=${encodeURIComponent(page.url)}&tone=audit&project=${encodeURIComponent(project.name)}`} className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
@@ -209,6 +216,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                       ) : null}
                     </div>
                     <p className="mt-2 text-sm text-zinc-500">{page.reports.length} saved snapshots in this project</p>
+                    <div className="mt-3">
+                      <ProjectPageStatusActions projectId={project.id} url={page.url} status={page.workflowState} />
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Link href={`/?url=${encodeURIComponent(page.url)}&tone=audit&project=${encodeURIComponent(project.name)}`} className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">

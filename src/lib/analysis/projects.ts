@@ -16,9 +16,18 @@ export type ProjectSummary = {
   latestReportAt?: string;
 };
 
+export type ProjectPageStatus = "none" | "follow_up" | "in_review" | "resolved";
+
+export type ProjectPageState = {
+  url: string;
+  status: ProjectPageStatus;
+  updatedAt: string;
+};
+
 export type ProjectRecord = ProjectSummary & {
   reportIds: string[];
   urls: string[];
+  pageStates?: Record<string, ProjectPageState>;
 };
 
 function getSupabaseConfig() {
@@ -181,6 +190,7 @@ export async function resolveProject(input: { projectId?: string; projectName?: 
     ...summary,
     reportIds: [],
     urls: [],
+    pageStates: {},
   };
 
   await writeObject(`projects/${record.id}.json`, record);
@@ -210,6 +220,51 @@ export async function attachReportToProject(input: {
     pageCount: urls.length,
     latestReportAt: input.reportedAt,
     updatedAt: input.reportedAt,
+    pageStates: project.pageStates ?? {},
+  };
+
+  await writeObject(`projects/${updated.id}.json`, updated);
+
+  const index = await loadIndex();
+  const summary: ProjectSummary = {
+    id: updated.id,
+    name: updated.name,
+    slug: updated.slug,
+    description: updated.description,
+    createdAt: updated.createdAt,
+    updatedAt: updated.updatedAt,
+    reportCount: updated.reportCount,
+    pageCount: updated.pageCount,
+    latestReportAt: updated.latestReportAt,
+  };
+
+  await saveIndex(sortNewest([summary, ...index.filter((projectItem) => projectItem.id !== updated.id)]));
+
+  return updated;
+}
+
+export async function updateProjectPageState(input: {
+  projectId: string;
+  url: string;
+  status: ProjectPageStatus;
+}) {
+  const project = await getProjectById(input.projectId);
+  if (!project) {
+    throw new Error("Project not found.");
+  }
+
+  const now = new Date().toISOString();
+  const pageStates = { ...(project.pageStates ?? {}) };
+  pageStates[input.url] = {
+    url: input.url,
+    status: input.status,
+    updatedAt: now,
+  };
+
+  const updated: ProjectRecord = {
+    ...project,
+    pageStates,
+    updatedAt: now,
   };
 
   await writeObject(`projects/${updated.id}.json`, updated);
