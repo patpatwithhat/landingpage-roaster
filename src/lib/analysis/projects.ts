@@ -24,10 +24,19 @@ export type ProjectPageState = {
   updatedAt: string;
 };
 
+export type ProjectActivityEvent = {
+  id: string;
+  type: "report_saved" | "page_status_changed";
+  url: string;
+  createdAt: string;
+  detail: string;
+};
+
 export type ProjectRecord = ProjectSummary & {
   reportIds: string[];
   urls: string[];
   pageStates?: Record<string, ProjectPageState>;
+  activity?: ProjectActivityEvent[];
 };
 
 function getSupabaseConfig() {
@@ -191,6 +200,7 @@ export async function resolveProject(input: { projectId?: string; projectName?: 
     reportIds: [],
     urls: [],
     pageStates: {},
+    activity: [],
   };
 
   await writeObject(`projects/${record.id}.json`, record);
@@ -212,6 +222,14 @@ export async function attachReportToProject(input: {
 
   const reportIds = project.reportIds.includes(input.reportId) ? project.reportIds : [input.reportId, ...project.reportIds];
   const urls = project.urls.includes(input.analyzedUrl) ? project.urls : [input.analyzedUrl, ...project.urls];
+  const nextActivity: ProjectActivityEvent = {
+    id: randomUUID(),
+    type: "report_saved",
+    url: input.analyzedUrl,
+    createdAt: input.reportedAt,
+    detail: "Saved a new report snapshot",
+  };
+
   const updated: ProjectRecord = {
     ...project,
     reportIds,
@@ -221,6 +239,7 @@ export async function attachReportToProject(input: {
     latestReportAt: input.reportedAt,
     updatedAt: input.reportedAt,
     pageStates: project.pageStates ?? {},
+    activity: [nextActivity, ...(project.activity ?? [])].slice(0, 40),
   };
 
   await writeObject(`projects/${updated.id}.json`, updated);
@@ -261,10 +280,26 @@ export async function updateProjectPageState(input: {
     updatedAt: now,
   };
 
+  const nextActivity: ProjectActivityEvent = {
+    id: randomUUID(),
+    type: "page_status_changed",
+    url: input.url,
+    createdAt: now,
+    detail:
+      input.status === "none"
+        ? "Cleared workflow state"
+        : input.status === "follow_up"
+          ? "Marked page for follow-up"
+          : input.status === "in_review"
+            ? "Moved page into review"
+            : "Marked page as resolved",
+  };
+
   const updated: ProjectRecord = {
     ...project,
     pageStates,
     updatedAt: now,
+    activity: [nextActivity, ...(project.activity ?? [])].slice(0, 40),
   };
 
   await writeObject(`projects/${updated.id}.json`, updated);

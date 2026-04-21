@@ -105,6 +105,7 @@ export default async function ProjectPage({
   const quickWins = pages
     .filter((page) => page.latest.scores.cta < 55 || page.latest.scores.trust < 55 || page.latest.scores.clarity < 55)
     .slice(0, 3);
+  const activity = (project.activity ?? []).slice(0, 12);
   const filterCounts: Record<FilterKey, number> = {
     all: pages.length,
     follow_up: pages.filter((page) => page.workflowState === "follow_up").length,
@@ -238,6 +239,35 @@ export default async function ProjectPage({
                 </div>
               )}
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-[2rem] border border-zinc-800/80 bg-zinc-900/55 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold text-white">Activity</h2>
+              <p className="mt-2 text-sm text-zinc-400">Recent workflow and reporting events across this project.</p>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-3">
+            {activity.length ? (
+              activity.map((event) => (
+                <div key={event.id} className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-white">{event.detail}</p>
+                      <p className="mt-1 text-sm text-zinc-400">{event.url}</p>
+                    </div>
+                    <p className="text-xs text-zinc-500">{new Date(event.createdAt).toLocaleString("de-DE")}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-3xl border border-dashed border-zinc-800 bg-zinc-950/60 p-8 text-center text-zinc-400">
+                No activity yet.
+              </div>
+            )}
           </div>
         </section>
 
