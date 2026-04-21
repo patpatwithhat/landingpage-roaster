@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 
+import { getOwnerContext } from "@/lib/auth/session";
 import { getSavedReportById } from "@/lib/analysis/saved-reports";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const owner = await getOwnerContext();
     const { id } = await params;
-    const report = await getSavedReportById(id);
+    const report = await getSavedReportById(owner, id);
 
     if (!report) {
       return NextResponse.json({ error: "Saved report not found." }, { status: 404 });

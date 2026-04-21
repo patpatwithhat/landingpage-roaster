@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 
+import { getScopedPath, type OwnerContext } from "@/lib/auth/session";
+import { getSupabaseConfig, supabaseServiceRequest } from "@/lib/supabase/server";
+
 import type { AuditResult, OutputTone } from "./schema";
 
 const SAVED_REPORTS_BUCKET = "landingpage-roaster-saved-reports";
-const INDEX_PATH = "index/reports.json";
 let bucketEnsured = false;
 
 export type SavedReportSummary = {
@@ -22,6 +24,7 @@ export type SavedReportSummary = {
   createdAt: string;
   updatedAt: string;
   compareHintPreviousId?: string;
+  ownerType: OwnerContext["ownerType"];
 };
 
 export type SavedReportGroup = {
@@ -33,36 +36,10 @@ export type SavedReportRecord = SavedReportSummary & {
   report: AuditResult;
 };
 
-function getSupabaseConfig() {
-  const url = process.env.LPR_SUPABASE_URL ?? process.env.SUPABASE_URL;
-  const secret = process.env.LPR_SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SECRET_KEY;
-
-  if (!url || !secret) {
-    return null;
-  }
-
-  return { url, secret };
-}
-
-async function supabaseRequest(path: string, init?: RequestInit) {
-  const config = getSupabaseConfig();
-  if (!config) return null;
-
-  return fetch(`${config.url}${path}`, {
-    ...init,
-    headers: {
-      apikey: config.secret,
-      Authorization: `Bearer ${config.secret}`,
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
-}
-
 async function ensureBucket() {
   if (bucketEnsured) return;
 
-  const listResponse = await supabaseRequest("/storage/v1/bucket");
+  const listResponse = await supabaseServiceRequest("/storage/v1/bucket");
   if (!listResponse) return;
 
   if (!listResponse.ok) {
@@ -72,7 +49,7 @@ async function ensureBucket() {
 
   const buckets = (await listResponse.json()) as Array<{ id: string }>;
   if (!buckets.some((bucket) => bucket.id === SAVED_REPORTS_BUCKET)) {
-    const createResponse = await supabaseRequest("/storage/v1/bucket", {
+    const createResponse = await supabaseServiceRequest("/storage/v1/bucket", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: SAVED_REPORTS_BUCKET, name: SAVED_REPORTS_BUCKET, public: false }),
@@ -88,7 +65,7 @@ async function ensureBucket() {
 }
 
 async function readObject<T>(path: string) {
-  const response = await supabaseRequest(`/storage/v1/object/${SAVED_REPORTS_BUCKET}/${path}`);
+  const response = await supabaseServiceRequest(`/storage/v1/object/${SAVED_REPORTS_BUCKET}/${path}`);
   if (!response) return null;
 
   if (!response.ok) {
@@ -103,7 +80,7 @@ async function readObject<T>(path: string) {
 }
 
 async function writeObject(path: string, value: unknown) {
-  const response = await supabaseRequest(`/storage/v1/object/${SAVED_REPORTS_BUCKET}/${path}`, {
+  const response = await supabaseServiceRequest(`/storage/v1/object/${SAVED_REPORTS_BUCKET}/${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -122,17 +99,25 @@ async function writeObject(path: string, value: unknown) {
   }
 }
 
-async function loadIndex() {
-  await ensureBucket();
-  return (await readObject<SavedReportSummary[]>(INDEX_PATH)) ?? [];
+function getIndexPath(owner: OwnerContext) {
+  return `${getScopedPath(owner, "reports")}/index/reports.json`;
 }
 
-async function saveIndex(index: SavedReportSummary[]) {
-  await ensureBucket();
-  await writeObject(INDEX_PATH, index);
+function getRecordPath(owner: OwnerContext, id: string) {
+  return `${getScopedPath(owner, "reports")}/records/${id}.json`;
 }
 
-function buildSummary(report: AuditResult, existing?: SavedReportSummary): SavedReportSummary {
+async function loadIndex(owner: OwnerContext) {
+  await ensureBucket();
+  return (await readObject<SavedReportSummary[]>(getIndexPath(owner))) ?? [];
+}
+
+async function saveIndex(owner: OwnerContext, index: SavedReportSummary[]) {
+  await ensureBucket();
+  await writeObject(getIndexPath(owner), index);
+}
+
+function buildSummary(owner: OwnerContext, report: AuditResult, existing?: SavedReportSummary): SavedReportSummary {
   const now = new Date().toISOString();
 
   return {
@@ -150,6 +135,7 @@ function buildSummary(report: AuditResult, existing?: SavedReportSummary): Saved
     scores: report.structuredAnalysis.scores,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
+    ownerType: owner.ownerType,
   };
 }
 
@@ -174,12 +160,12 @@ function withCompareHints(items: SavedReportSummary[]) {
   });
 }
 
-export async function saveReport(report: AuditResult, input?: { projectId?: string; projectName?: string }) {
+export async function saveReport(owner: OwnerContext, report: AuditResult, input?: { projectId?: string; projectName?: string }) {
   if (!getSupabaseConfig()) {
     throw new Error("Missing Supabase config for saved reports.");
   }
 
-  const index = await loadIndex();
+  const index = await loadIndex(owner);
   const existing = index.find(
     (item) =>
       item.analyzedUrl === report.analyzedUrl &&
@@ -188,7 +174,7 @@ export async function saveReport(report: AuditResult, input?: { projectId?: stri
       item.analysisVersion === report.analysisVersion,
   );
 
-  const summary = buildSummary(report, existing);
+  const summary = buildSummary(owner, report, existing);
   if (input?.projectId) summary.projectId = input.projectId;
   if (input?.projectName) summary.projectName = input.projectName;
   if (existing?.projectId && !summary.projectId) summary.projectId = existing.projectId;
@@ -198,27 +184,23 @@ export async function saveReport(report: AuditResult, input?: { projectId?: stri
     report,
   };
 
-  await writeObject(`reports/${summary.id}.json`, record);
+  await writeObject(getRecordPath(owner, summary.id), record);
 
-  const nextIndex = sortNewestFirst([
-    summary,
-    ...index.filter((item) => item.id !== summary.id),
-  ]);
-
-  await saveIndex(nextIndex);
+  const nextIndex = sortNewestFirst([summary, ...index.filter((item) => item.id !== summary.id)]);
+  await saveIndex(owner, nextIndex);
 
   return record;
 }
 
-export async function listSavedReports(input?: { limit?: number; domain?: string; projectId?: string }) {
-  const index = withCompareHints(sortNewestFirst(await loadIndex()));
+export async function listSavedReports(owner: OwnerContext, input?: { limit?: number; domain?: string; projectId?: string }) {
+  const index = withCompareHints(sortNewestFirst(await loadIndex(owner)));
   const filteredByDomain = input?.domain ? index.filter((item) => item.domain === input.domain) : index;
   const filtered = input?.projectId ? filteredByDomain.filter((item) => item.projectId === input.projectId) : filteredByDomain;
   return typeof input?.limit === "number" ? filtered.slice(0, input.limit) : filtered;
 }
 
-export async function listSavedReportGroups() {
-  const reports = await listSavedReports();
+export async function listSavedReportGroups(owner: OwnerContext) {
+  const reports = await listSavedReports(owner);
   const groups = new Map<string, SavedReportSummary[]>();
 
   for (const report of reports) {
@@ -230,7 +212,7 @@ export async function listSavedReportGroups() {
   return Array.from(groups.entries()).map(([domain, reports]) => ({ domain, reports })) satisfies SavedReportGroup[];
 }
 
-export async function getSavedReportById(id: string) {
+export async function getSavedReportById(owner: OwnerContext, id: string) {
   await ensureBucket();
-  return readObject<SavedReportRecord>(`reports/${id}.json`);
+  return readObject<SavedReportRecord>(getRecordPath(owner, id));
 }

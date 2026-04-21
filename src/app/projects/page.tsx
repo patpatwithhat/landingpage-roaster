@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { getOwnerContext } from "@/lib/auth/session";
 import { getProjectById, listProjects } from "@/lib/analysis/projects";
 import { listSavedReports } from "@/lib/analysis/saved-reports";
 
@@ -8,8 +9,9 @@ function healthTone(count: number) {
 }
 
 export default async function ProjectsPage() {
-  const [projects, reports] = await Promise.all([listProjects(), listSavedReports()]);
-  const projectRecords = await Promise.all(projects.map((project) => getProjectById(project.id)));
+  const owner = await getOwnerContext();
+  const [projects, reports] = await Promise.all([listProjects(owner), listSavedReports(owner)]);
+  const projectRecords = await Promise.all(projects.map((project) => getProjectById(owner, project.id)));
   const existingProjectRecords = projectRecords.filter((project): project is NonNullable<typeof project> => Boolean(project));
   const projectRecordMap = new Map(existingProjectRecords.map((project) => [project.id, project]));
 

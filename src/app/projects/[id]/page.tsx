@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { getOwnerContext } from "@/lib/auth/session";
 import { getProjectById } from "@/lib/analysis/projects";
 import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
 import { listSavedReports } from "@/lib/analysis/saved-reports";
@@ -65,12 +66,13 @@ export default async function ProjectPage({
     ? query.filter
     : "all") as FilterKey;
   const activeActivityFilter = (["all", "reports", "workflow"].includes(query.activity ?? "") ? query.activity : "all") as ActivityFilterKey;
+  const owner = await getOwnerContext();
 
-  const project = await getProjectById(id);
+  const project = await getProjectById(owner, id);
 
   if (!project) notFound();
 
-  const reports = await listSavedReports({ projectId: project.id });
+  const reports = await listSavedReports(owner, { projectId: project.id });
   const grouped = new Map<string, typeof reports>();
 
   for (const report of reports) {

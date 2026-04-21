@@ -10,6 +10,20 @@ import type { ProjectSummary } from "@/lib/analysis/projects";
 import type { SavedReportSummary } from "@/lib/analysis/saved-reports";
 import type { AuditResult, CriterionAssessment, OutputTone, ScoreBucketResult } from "@/lib/analysis/schema";
 
+type SessionPayload = {
+  session: {
+    ownerType: "anonymous" | "user";
+    isAuthenticated: boolean;
+    displayName: string;
+  };
+  auth: {
+    github: {
+      available: boolean;
+      reason: string | null;
+    };
+  };
+};
+
 function scoreTone(score: number) {
   return score >= 75
     ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
@@ -110,6 +124,12 @@ export default function Home() {
     return new URLSearchParams(window.location.search).get("project") ?? "";
   });
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [session, setSession] = useState<SessionPayload["session"] | null>(null);
+  const [githubAuth, setGithubAuth] = useState<SessionPayload["auth"]["github"] | null>(null);
+  const [returnTo] = useState(() => {
+    if (typeof window === "undefined") return "/";
+    return `${window.location.pathname}${window.location.search}` || "/";
+  });
 
   async function runAnalysis(nextUrl: string, nextOutputTone: OutputTone) {
     setIsLoading(true);
@@ -174,6 +194,21 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
 
+    async function loadSession() {
+      try {
+        const response = await fetch("/api/session");
+        const payload = (await response.json()) as SessionPayload;
+        if (!response.ok || cancelled) return;
+        setSession(payload.session);
+        setGithubAuth(payload.auth.github);
+      } catch {
+        if (!cancelled) {
+          setSession(null);
+          setGithubAuth(null);
+        }
+      }
+    }
+
     async function loadRecentReports() {
       try {
         const response = await fetch("/api/reports?limit=6");
@@ -185,7 +220,7 @@ export default function Home() {
       }
     }
 
-    void loadRecentReports();
+    void Promise.all([loadSession(), loadRecentReports()]);
 
     return () => {
       cancelled = true;
@@ -359,6 +394,27 @@ export default function Home() {
             <div className="mt-6 rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 text-sm text-zinc-400 backdrop-blur-sm">
               Analyze the page, score clear criteria, and turn the findings into an audience-appropriate report.
             </div>
+            <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 text-sm text-zinc-400 backdrop-blur-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium text-zinc-200">Ownership mode</p>
+                  <p className="mt-1 leading-6">
+                    {session?.isAuthenticated
+                      ? `Signed in as ${session.displayName}. Reports and projects belong to your account.`
+                      : "Guest mode is active. Analyze freely first. Saved work is currently scoped to this browser until GitHub login is available."}
+                  </p>
+                </div>
+                {!session?.isAuthenticated ? (
+                  <a
+                    href={`/api/auth/github?returnTo=${encodeURIComponent(returnTo)}`}
+                    className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
+                  >
+                    Continue with GitHub
+                  </a>
+                ) : null}
+              </div>
+              {!githubAuth?.available && githubAuth?.reason ? <p className="mt-3 text-xs text-amber-300">{githubAuth.reason}</p> : null}
+            </div>
             {error ? <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">{error}</div> : null}
           </div>
         </section>
@@ -477,6 +533,14 @@ export default function Home() {
                 <p className="mt-3 text-sm leading-6 text-zinc-400">
                   Save this analysis so you can reopen it later, keep a history of changes, and compare important iterations side by side.
                 </p>
+                {!session?.isAuthenticated ? (
+                  <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-100">
+                    <p className="font-medium">Guest save mode</p>
+                    <p className="mt-2 leading-6 text-amber-200/80">
+                      Saves now live inside your current browser scope. GitHub login is the next step for true account ownership and cross-device access.
+                    </p>
+                  </div>
+                ) : null}
                 <div className="mt-5 space-y-3">
                   <label className="block text-sm text-zinc-300" htmlFor="projectName">
                     Project name (optional)

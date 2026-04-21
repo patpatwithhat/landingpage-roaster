@@ -1,10 +1,12 @@
 import Link from "next/link";
 
+import { getOwnerContext } from "@/lib/auth/session";
 import { listSavedReportGroups } from "@/lib/analysis/saved-reports";
 import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
 
 export default async function ReportsPage() {
-  const groups = await listSavedReportGroups();
+  const owner = await getOwnerContext();
+  const groups = await listSavedReportGroups(owner);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-6 py-12 text-zinc-50">

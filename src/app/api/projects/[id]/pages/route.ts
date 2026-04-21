@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 
+import { getOwnerContext } from "@/lib/auth/session";
 import { updateProjectPageState, type ProjectPageStatus } from "@/lib/analysis/projects";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const owner = await getOwnerContext();
     const { id } = await params;
     const body = (await request.json()) as { url?: string; status?: ProjectPageStatus };
 
@@ -15,7 +17,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "Invalid status." }, { status: 400 });
     }
 
-    const project = await updateProjectPageState({
+    const project = await updateProjectPageState(owner, {
       projectId: id,
       url: body.url.trim(),
       status: body.status,

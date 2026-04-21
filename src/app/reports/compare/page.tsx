@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { getOwnerContext } from "@/lib/auth/session";
 import { getSavedReportById } from "@/lib/analysis/saved-reports";
 
 function scoreDelta(current: number, previous: number) {
@@ -74,6 +75,7 @@ export default async function ComparePage({
   const params = await searchParams;
   const leftId = params.left ?? "";
   const rightId = params.right ?? "";
+  const owner = await getOwnerContext();
 
   if (!leftId || !rightId) {
     return (
@@ -86,8 +88,8 @@ export default async function ComparePage({
     );
   }
 
-  const left = await getSavedReportById(leftId);
-  const right = await getSavedReportById(rightId);
+  const left = await getSavedReportById(owner, leftId);
+  const right = await getSavedReportById(owner, rightId);
 
   if (!left || !right) {
     return (

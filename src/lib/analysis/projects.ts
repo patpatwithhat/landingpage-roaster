@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 
+import { getScopedPath, type OwnerContext } from "@/lib/auth/session";
+import { getSupabaseConfig, supabaseServiceRequest } from "@/lib/supabase/server";
+
 const PROJECTS_BUCKET = "landingpage-roaster-projects";
-const PROJECT_INDEX_PATH = "index/projects.json";
 let bucketEnsured = false;
 
 export type ProjectSummary = {
@@ -14,6 +16,7 @@ export type ProjectSummary = {
   reportCount: number;
   pageCount: number;
   latestReportAt?: string;
+  ownerType: OwnerContext["ownerType"];
 };
 
 export type ProjectPageStatus = "none" | "follow_up" | "in_review" | "resolved";
@@ -39,36 +42,10 @@ export type ProjectRecord = ProjectSummary & {
   activity?: ProjectActivityEvent[];
 };
 
-function getSupabaseConfig() {
-  const url = process.env.LPR_SUPABASE_URL ?? process.env.SUPABASE_URL;
-  const secret = process.env.LPR_SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SECRET_KEY;
-
-  if (!url || !secret) {
-    return null;
-  }
-
-  return { url, secret };
-}
-
-async function supabaseRequest(path: string, init?: RequestInit) {
-  const config = getSupabaseConfig();
-  if (!config) return null;
-
-  return fetch(`${config.url}${path}`, {
-    ...init,
-    headers: {
-      apikey: config.secret,
-      Authorization: `Bearer ${config.secret}`,
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
-}
-
 async function ensureBucket() {
   if (bucketEnsured) return;
 
-  const listResponse = await supabaseRequest("/storage/v1/bucket");
+  const listResponse = await supabaseServiceRequest("/storage/v1/bucket");
   if (!listResponse) return;
 
   if (!listResponse.ok) {
@@ -78,7 +55,7 @@ async function ensureBucket() {
 
   const buckets = (await listResponse.json()) as Array<{ id: string }>;
   if (!buckets.some((bucket) => bucket.id === PROJECTS_BUCKET)) {
-    const createResponse = await supabaseRequest("/storage/v1/bucket", {
+    const createResponse = await supabaseServiceRequest("/storage/v1/bucket", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: PROJECTS_BUCKET, name: PROJECTS_BUCKET, public: false }),
@@ -94,7 +71,7 @@ async function ensureBucket() {
 }
 
 async function readObject<T>(path: string) {
-  const response = await supabaseRequest(`/storage/v1/object/${PROJECTS_BUCKET}/${path}`);
+  const response = await supabaseServiceRequest(`/storage/v1/object/${PROJECTS_BUCKET}/${path}`);
   if (!response) return null;
 
   if (!response.ok) {
@@ -109,7 +86,7 @@ async function readObject<T>(path: string) {
 }
 
 async function writeObject(path: string, value: unknown) {
-  const response = await supabaseRequest(`/storage/v1/object/${PROJECTS_BUCKET}/${path}`, {
+  const response = await supabaseServiceRequest(`/storage/v1/object/${PROJECTS_BUCKET}/${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -137,37 +114,45 @@ function slugify(input: string) {
     .slice(0, 60);
 }
 
-async function loadIndex() {
-  await ensureBucket();
-  return (await readObject<ProjectSummary[]>(PROJECT_INDEX_PATH)) ?? [];
+function getProjectIndexPath(owner: OwnerContext) {
+  return `${getScopedPath(owner, "projects")}/index/projects.json`;
 }
 
-async function saveIndex(index: ProjectSummary[]) {
+function getProjectRecordPath(owner: OwnerContext, id: string) {
+  return `${getScopedPath(owner, "projects")}/records/${id}.json`;
+}
+
+async function loadIndex(owner: OwnerContext) {
   await ensureBucket();
-  await writeObject(PROJECT_INDEX_PATH, index);
+  return (await readObject<ProjectSummary[]>(getProjectIndexPath(owner))) ?? [];
+}
+
+async function saveIndex(owner: OwnerContext, index: ProjectSummary[]) {
+  await ensureBucket();
+  await writeObject(getProjectIndexPath(owner), index);
 }
 
 function sortNewest(items: ProjectSummary[]) {
   return [...items].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 }
 
-export async function listProjects() {
-  return sortNewest(await loadIndex());
+export async function listProjects(owner: OwnerContext) {
+  return sortNewest(await loadIndex(owner));
 }
 
-export async function getProjectById(id: string) {
+export async function getProjectById(owner: OwnerContext, id: string) {
   await ensureBucket();
-  return readObject<ProjectRecord>(`projects/${id}.json`);
+  return readObject<ProjectRecord>(getProjectRecordPath(owner, id));
 }
 
-export async function resolveProject(input: { projectId?: string; projectName?: string | null }) {
+export async function resolveProject(owner: OwnerContext, input: { projectId?: string; projectName?: string | null }) {
   if (!getSupabaseConfig()) {
     throw new Error("Missing Supabase config for projects.");
   }
 
   const explicitId = input.projectId?.trim();
   if (explicitId) {
-    const existing = await getProjectById(explicitId);
+    const existing = await getProjectById(owner, explicitId);
     if (!existing) {
       throw new Error("Project not found.");
     }
@@ -177,11 +162,11 @@ export async function resolveProject(input: { projectId?: string; projectName?: 
   const name = input.projectName?.trim();
   if (!name) return null;
 
-  const index = await loadIndex();
+  const index = await loadIndex(owner);
   const slugBase = slugify(name);
   const existingSummary = index.find((project) => project.slug === slugBase || project.name.toLowerCase() === name.toLowerCase());
   if (existingSummary) {
-    return getProjectById(existingSummary.id);
+    return getProjectById(owner, existingSummary.id);
   }
 
   const now = new Date().toISOString();
@@ -193,6 +178,7 @@ export async function resolveProject(input: { projectId?: string; projectName?: 
     updatedAt: now,
     reportCount: 0,
     pageCount: 0,
+    ownerType: owner.ownerType,
   };
 
   const record: ProjectRecord = {
@@ -203,19 +189,22 @@ export async function resolveProject(input: { projectId?: string; projectName?: 
     activity: [],
   };
 
-  await writeObject(`projects/${record.id}.json`, record);
-  await saveIndex(sortNewest([summary, ...index.filter((project) => project.id !== record.id)]));
+  await writeObject(getProjectRecordPath(owner, record.id), record);
+  await saveIndex(owner, sortNewest([summary, ...index.filter((project) => project.id !== record.id)]));
 
   return record;
 }
 
-export async function attachReportToProject(input: {
-  projectId: string;
-  reportId: string;
-  analyzedUrl: string;
-  reportedAt: string;
-}) {
-  const project = await getProjectById(input.projectId);
+export async function attachReportToProject(
+  owner: OwnerContext,
+  input: {
+    projectId: string;
+    reportId: string;
+    analyzedUrl: string;
+    reportedAt: string;
+  },
+) {
+  const project = await getProjectById(owner, input.projectId);
   if (!project) {
     throw new Error("Project not found.");
   }
@@ -242,9 +231,9 @@ export async function attachReportToProject(input: {
     activity: [nextActivity, ...(project.activity ?? [])].slice(0, 40),
   };
 
-  await writeObject(`projects/${updated.id}.json`, updated);
+  await writeObject(getProjectRecordPath(owner, updated.id), updated);
 
-  const index = await loadIndex();
+  const index = await loadIndex(owner);
   const summary: ProjectSummary = {
     id: updated.id,
     name: updated.name,
@@ -255,19 +244,23 @@ export async function attachReportToProject(input: {
     reportCount: updated.reportCount,
     pageCount: updated.pageCount,
     latestReportAt: updated.latestReportAt,
+    ownerType: updated.ownerType,
   };
 
-  await saveIndex(sortNewest([summary, ...index.filter((projectItem) => projectItem.id !== updated.id)]));
+  await saveIndex(owner, sortNewest([summary, ...index.filter((projectItem) => projectItem.id !== updated.id)]));
 
   return updated;
 }
 
-export async function updateProjectPageState(input: {
-  projectId: string;
-  url: string;
-  status: ProjectPageStatus;
-}) {
-  const project = await getProjectById(input.projectId);
+export async function updateProjectPageState(
+  owner: OwnerContext,
+  input: {
+    projectId: string;
+    url: string;
+    status: ProjectPageStatus;
+  },
+) {
+  const project = await getProjectById(owner, input.projectId);
   if (!project) {
     throw new Error("Project not found.");
   }
@@ -302,9 +295,9 @@ export async function updateProjectPageState(input: {
     activity: [nextActivity, ...(project.activity ?? [])].slice(0, 40),
   };
 
-  await writeObject(`projects/${updated.id}.json`, updated);
+  await writeObject(getProjectRecordPath(owner, updated.id), updated);
 
-  const index = await loadIndex();
+  const index = await loadIndex(owner);
   const summary: ProjectSummary = {
     id: updated.id,
     name: updated.name,
@@ -315,9 +308,10 @@ export async function updateProjectPageState(input: {
     reportCount: updated.reportCount,
     pageCount: updated.pageCount,
     latestReportAt: updated.latestReportAt,
+    ownerType: updated.ownerType,
   };
 
-  await saveIndex(sortNewest([summary, ...index.filter((projectItem) => projectItem.id !== updated.id)]));
+  await saveIndex(owner, sortNewest([summary, ...index.filter((projectItem) => projectItem.id !== updated.id)]));
 
   return updated;
 }

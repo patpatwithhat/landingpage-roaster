@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { getOwnerContext } from "@/lib/auth/session";
 import { getSavedReportById, listSavedReports } from "@/lib/analysis/saved-reports";
 import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
 
@@ -17,15 +18,16 @@ function scoreBarTone(score: number) {
 }
 
 export default async function SavedReportPage({ params }: { params: Promise<{ id: string }> }) {
+  const owner = await getOwnerContext();
   const { id } = await params;
-  const saved = await getSavedReportById(id);
+  const saved = await getSavedReportById(owner, id);
 
   if (!saved) notFound();
 
   const result = saved.report;
   const profile = toneProfiles[result.outputTone];
   const buckets = result.structuredAnalysis.buckets;
-  const relatedReports = (await listSavedReports({ domain: saved.domain }))
+  const relatedReports = (await listSavedReports(owner, { domain: saved.domain }))
     .filter((report) => report.analyzedUrl === saved.analyzedUrl && report.id !== saved.id)
     .slice(0, 4);
 
