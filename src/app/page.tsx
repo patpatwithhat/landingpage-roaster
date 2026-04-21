@@ -443,10 +443,12 @@ export default function Home() {
                   <p className="mt-1 leading-6">
                     {session?.isAuthenticated
                       ? `Signed in as ${session.displayName}. Reports and projects belong to your account.`
-                      : "Guest mode is active. Analyze freely first. Saved work is currently scoped to this browser until GitHub login is available."}
+                      : githubAuth?.available
+                        ? "Guest mode is active. Analyze freely first, then connect GitHub when you want to keep reports and projects across sessions."
+                        : "Guest mode is active. Analyze freely first. Cross-session ownership is not configured in this deployment yet."}
                   </p>
                 </div>
-                {!session?.isAuthenticated ? (
+                {!session?.isAuthenticated && githubAuth?.available ? (
                   <button
                     type="button"
                     onClick={() => void handleGitHubLogin()}
@@ -454,7 +456,7 @@ export default function Home() {
                   >
                     Continue with GitHub
                   </button>
-                ) : (
+                ) : session?.isAuthenticated ? (
                   <button
                     type="button"
                     onClick={() => void handleLogout()}
@@ -462,7 +464,7 @@ export default function Home() {
                   >
                     Log out
                   </button>
-                )}
+                ) : null}
               </div>
               {!githubAuth?.available && githubAuth?.reason ? <p className="mt-3 text-xs text-amber-300">{githubAuth.reason}</p> : null}
             </div>
