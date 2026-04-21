@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import { analysisProfiles } from "@/lib/analysis/profiles/analysisProfiles";
 import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
+import type { ProjectSummary } from "@/lib/analysis/projects";
 import type { SavedReportSummary } from "@/lib/analysis/saved-reports";
 import type { AuditResult, CriterionAssessment, OutputTone, ScoreBucketResult } from "@/lib/analysis/schema";
 
@@ -104,6 +105,8 @@ export default function Home() {
   const [recentReports, setRecentReports] = useState<SavedReportSummary[]>([]);
   const [savedReportId, setSavedReportId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [projectName, setProjectName] = useState("");
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
 
   async function runAnalysis(nextUrl: string, nextOutputTone: OutputTone) {
     setIsLoading(true);
@@ -186,6 +189,27 @@ export default function Home() {
     };
   }, [savedReportId]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProjects() {
+      try {
+        const response = await fetch("/api/projects");
+        const payload = (await response.json()) as { projects?: ProjectSummary[] };
+        if (!response.ok || !payload.projects || cancelled) return;
+        setProjects(payload.projects);
+      } catch {
+        if (!cancelled) setProjects([]);
+      }
+    }
+
+    void loadProjects();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [savedReportId]);
+
   async function handleSaveReport() {
     if (!result || isSaving) return;
 
@@ -197,7 +221,10 @@ export default function Home() {
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ report: result }),
+        body: JSON.stringify({
+          report: result,
+          projectName: projectName.trim() || undefined,
+        }),
       });
 
       const payload = (await response.json()) as { report?: SavedReportSummary; error?: string };
@@ -207,6 +234,9 @@ export default function Home() {
       }
 
       setSavedReportId(payload.report.id);
+      if (payload.report.projectName) {
+        setProjectName(payload.report.projectName);
+      }
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : "Could not save report.";
       setError(message);
@@ -235,6 +265,12 @@ export default function Home() {
             >
               Go analyze
             </a>
+            <Link
+              href="/projects"
+              className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
+            >
+              Projects
+            </Link>
             <Link
               href="/reports"
               className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
@@ -438,6 +474,27 @@ export default function Home() {
                 <p className="mt-3 text-sm leading-6 text-zinc-400">
                   Save this analysis so you can reopen it later, keep a history of changes, and compare important iterations side by side.
                 </p>
+                <div className="mt-5 space-y-3">
+                  <label className="block text-sm text-zinc-300" htmlFor="projectName">
+                    Project name (optional)
+                  </label>
+                  <input
+                    id="projectName"
+                    list="project-suggestions"
+                    value={projectName}
+                    onChange={(event) => setProjectName(event.target.value)}
+                    placeholder="e.g. laddr blog growth"
+                    className="w-full rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-emerald-400"
+                  />
+                  <datalist id="project-suggestions">
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.name} />
+                    ))}
+                  </datalist>
+                  <p className="text-xs leading-5 text-zinc-500">
+                    Use a project to keep related URLs, saved reports, and compare flows together.
+                  </p>
+                </div>
                 <div className="mt-5 flex flex-wrap gap-3">
                   <button
                     type="button"
@@ -453,6 +510,14 @@ export default function Home() {
                       className="inline-flex rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
                     >
                       Open saved report
+                    </Link>
+                  ) : null}
+                  {savedReportId && projectName ? (
+                    <Link
+                      href="/projects"
+                      className="inline-flex rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
+                    >
+                      Open projects
                     </Link>
                   ) : null}
                 </div>

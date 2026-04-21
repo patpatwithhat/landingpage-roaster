@@ -11,6 +11,8 @@ export type SavedReportSummary = {
   title: string;
   domain: string;
   analyzedUrl: string;
+  projectId?: string;
+  projectName?: string;
   outputTone: OutputTone;
   mode: AuditResult["mode"];
   analysisVersion: string;
@@ -138,6 +140,8 @@ function buildSummary(report: AuditResult, existing?: SavedReportSummary): Saved
     title: report.domain,
     domain: report.domain,
     analyzedUrl: report.analyzedUrl,
+    projectId: existing?.projectId,
+    projectName: existing?.projectName,
     outputTone: report.outputTone,
     mode: report.mode,
     analysisVersion: report.analysisVersion,
@@ -170,7 +174,7 @@ function withCompareHints(items: SavedReportSummary[]) {
   });
 }
 
-export async function saveReport(report: AuditResult) {
+export async function saveReport(report: AuditResult, input?: { projectId?: string; projectName?: string }) {
   if (!getSupabaseConfig()) {
     throw new Error("Missing Supabase config for saved reports.");
   }
@@ -185,6 +189,10 @@ export async function saveReport(report: AuditResult) {
   );
 
   const summary = buildSummary(report, existing);
+  if (input?.projectId) summary.projectId = input.projectId;
+  if (input?.projectName) summary.projectName = input.projectName;
+  if (existing?.projectId && !summary.projectId) summary.projectId = existing.projectId;
+  if (existing?.projectName && !summary.projectName) summary.projectName = existing.projectName;
   const record: SavedReportRecord = {
     ...summary,
     report,
@@ -202,9 +210,10 @@ export async function saveReport(report: AuditResult) {
   return record;
 }
 
-export async function listSavedReports(input?: { limit?: number; domain?: string }) {
+export async function listSavedReports(input?: { limit?: number; domain?: string; projectId?: string }) {
   const index = withCompareHints(sortNewestFirst(await loadIndex()));
-  const filtered = input?.domain ? index.filter((item) => item.domain === input.domain) : index;
+  const filteredByDomain = input?.domain ? index.filter((item) => item.domain === input.domain) : index;
+  const filtered = input?.projectId ? filteredByDomain.filter((item) => item.projectId === input.projectId) : filteredByDomain;
   return typeof input?.limit === "number" ? filtered.slice(0, input.limit) : filtered;
 }
 

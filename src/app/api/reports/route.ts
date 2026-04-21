@@ -7,10 +7,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const limitParam = searchParams.get("limit");
     const domain = searchParams.get("domain") ?? undefined;
+    const projectId = searchParams.get("projectId") ?? undefined;
     const limit = limitParam ? Number(limitParam) : undefined;
 
     const reports = await listSavedReports({
       domain,
+      projectId,
       limit: Number.isFinite(limit) ? limit : undefined,
     });
 
