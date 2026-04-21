@@ -315,3 +315,35 @@ export async function updateProjectPageState(
 
   return updated;
 }
+
+export async function claimProjects(fromOwner: OwnerContext, toOwner: OwnerContext) {
+  const sourceIndex = await loadIndex(fromOwner);
+  if (!sourceIndex.length) {
+    return { claimed: 0 };
+  }
+
+  const targetIndex = await loadIndex(toOwner);
+  const claimedProjects: ProjectSummary[] = [];
+
+  for (const summary of sourceIndex) {
+    const sourceRecord = await readObject<ProjectRecord>(getProjectRecordPath(fromOwner, summary.id));
+    if (!sourceRecord) continue;
+
+    const nextSummary: ProjectSummary = {
+      ...summary,
+      ownerType: toOwner.ownerType,
+    };
+    const nextRecord: ProjectRecord = {
+      ...sourceRecord,
+      ownerType: toOwner.ownerType,
+    };
+
+    await writeObject(getProjectRecordPath(toOwner, summary.id), nextRecord);
+    claimedProjects.push(nextSummary);
+  }
+
+  const merged = sortNewest([...claimedProjects, ...targetIndex.filter((item) => !claimedProjects.some((claimed) => claimed.id === item.id))]);
+  await saveIndex(toOwner, merged);
+
+  return { claimed: claimedProjects.length };
+}

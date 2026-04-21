@@ -9,6 +9,7 @@ import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
 import type { ProjectSummary } from "@/lib/analysis/projects";
 import type { SavedReportSummary } from "@/lib/analysis/saved-reports";
 import type { AuditResult, CriterionAssessment, OutputTone, ScoreBucketResult } from "@/lib/analysis/schema";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type SessionPayload = {
   session: {
@@ -130,6 +131,47 @@ export default function Home() {
     if (typeof window === "undefined") return "/";
     return `${window.location.pathname}${window.location.search}` || "/";
   });
+
+  async function handleGitHubLogin() {
+    setError(null);
+
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data, error: authError } = await supabase.auth.signInWithOAuth({
+        provider: "github",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}`,
+        },
+      });
+
+      if (authError) {
+        throw authError;
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : "Could not start GitHub login.";
+      setError(message);
+    }
+  }
+
+  async function handleLogout() {
+    setError(null);
+
+    try {
+      const supabase = createSupabaseBrowserClient();
+      await supabase.auth.signOut();
+      await fetch("/api/auth/logout", { method: "POST" });
+      setSession({ ownerType: "anonymous", isAuthenticated: false, displayName: "Guest" });
+      setSavedReportId(null);
+      window.location.reload();
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : "Could not log out.";
+      setError(message);
+    }
+  }
 
   async function runAnalysis(nextUrl: string, nextOutputTone: OutputTone) {
     setIsLoading(true);
@@ -405,13 +447,22 @@ export default function Home() {
                   </p>
                 </div>
                 {!session?.isAuthenticated ? (
-                  <a
-                    href={`/api/auth/github?returnTo=${encodeURIComponent(returnTo)}`}
+                  <button
+                    type="button"
+                    onClick={() => void handleGitHubLogin()}
                     className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
                   >
                     Continue with GitHub
-                  </a>
-                ) : null}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleLogout()}
+                    className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
+                  >
+                    Log out
+                  </button>
+                )}
               </div>
               {!githubAuth?.available && githubAuth?.reason ? <p className="mt-3 text-xs text-amber-300">{githubAuth.reason}</p> : null}
             </div>

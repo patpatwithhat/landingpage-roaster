@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
   const authorizeUrl = new URL(`${config.url}/auth/v1/authorize`);
   authorizeUrl.searchParams.set("provider", "github");
-  authorizeUrl.searchParams.set("redirect_to", new URL(`/api/auth/callback?returnTo=${encodeURIComponent(returnTo)}`, url.origin).toString());
+  authorizeUrl.searchParams.set("redirect_to", new URL(`/auth/callback?next=${encodeURIComponent(returnTo)}`, url.origin).toString());
 
   return NextResponse.redirect(authorizeUrl);
 }

@@ -216,3 +216,35 @@ export async function getSavedReportById(owner: OwnerContext, id: string) {
   await ensureBucket();
   return readObject<SavedReportRecord>(getRecordPath(owner, id));
 }
+
+export async function claimSavedReports(fromOwner: OwnerContext, toOwner: OwnerContext) {
+  const sourceIndex = await loadIndex(fromOwner);
+  if (!sourceIndex.length) {
+    return { claimed: 0 };
+  }
+
+  const targetIndex = await loadIndex(toOwner);
+  const claimedRecords: SavedReportSummary[] = [];
+
+  for (const summary of sourceIndex) {
+    const sourceRecord = await readObject<SavedReportRecord>(getRecordPath(fromOwner, summary.id));
+    if (!sourceRecord) continue;
+
+    const nextSummary: SavedReportSummary = {
+      ...summary,
+      ownerType: toOwner.ownerType,
+    };
+    const nextRecord: SavedReportRecord = {
+      ...sourceRecord,
+      ownerType: toOwner.ownerType,
+    };
+
+    await writeObject(getRecordPath(toOwner, summary.id), nextRecord);
+    claimedRecords.push(nextSummary);
+  }
+
+  const merged = sortNewestFirst([...claimedRecords, ...targetIndex.filter((item) => !claimedRecords.some((claimed) => claimed.id === item.id))]);
+  await saveIndex(toOwner, merged);
+
+  return { claimed: claimedRecords.length };
+}
