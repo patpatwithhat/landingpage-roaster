@@ -4,16 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-
 export function AuthCallbackClient({
-  code,
   next,
   authError,
+  accessToken,
 }: {
-  code?: string;
   next: string;
   authError?: string;
+  accessToken?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -23,28 +21,13 @@ export function AuthCallbackClient({
     let cancelled = false;
 
     async function finishLogin() {
-      let supabase;
-
-      try {
-        supabase = createSupabaseBrowserClient();
-      } catch (caughtError) {
-        setError(caughtError instanceof Error ? caughtError.message : "Missing Supabase browser config.");
-        return;
-      }
-
       if (authError) {
         setError(authError);
         return;
       }
 
-      if (!code) {
-        setError("Missing GitHub authorization code.");
-        return;
-      }
-
-      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-      if (exchangeError || !data.session?.access_token) {
-        setError(exchangeError?.message ?? "Could not exchange GitHub code for a session.");
+      if (!accessToken) {
+        setError("Could not exchange GitHub code for a session.");
         return;
       }
 
@@ -53,7 +36,7 @@ export function AuthCallbackClient({
       const response = await fetch("/api/auth/finalize", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ accessToken: data.session.access_token }),
+        body: JSON.stringify({ accessToken }),
       });
       const payload = (await response.json()) as { error?: string };
 
@@ -73,7 +56,7 @@ export function AuthCallbackClient({
     return () => {
       cancelled = true;
     };
-  }, [authError, code, next, router]);
+  }, [accessToken, authError, next, router]);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-6 py-12 text-zinc-50">
