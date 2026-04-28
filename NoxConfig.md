@@ -45,6 +45,15 @@ issue_creation:
 communication:
   style: caveman
 
+autonomous:
+  heartbeat_enabled: true
+  mode: goal_driven
+  ask_on_blockers: true
+  preview_first: true
+  codex_usage_pause_thresholds:
+    five_hour_percent: 80
+    seven_day_percent: 80
+
 integrations:
   env_prefix: LPR
   env_location: /home/openclaw/.openclaw/.env

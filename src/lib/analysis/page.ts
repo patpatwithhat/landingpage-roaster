@@ -1,5 +1,45 @@
 import { MAX_HTML_CHARS } from "./config";
 
+const TRACKING_PARAMS = new Set([
+  "fbclid",
+  "gclid",
+  "mc_cid",
+  "mc_eid",
+  "ref",
+  "source",
+  "utm_campaign",
+  "utm_content",
+  "utm_id",
+  "utm_medium",
+  "utm_source",
+  "utm_term",
+]);
+
+function canonicalizeUrl(url: URL) {
+  url.hash = "";
+  url.protocol = url.protocol.toLowerCase();
+  url.hostname = url.hostname.toLowerCase();
+
+  if ((url.protocol === "https:" && url.port === "443") || (url.protocol === "http:" && url.port === "80")) {
+    url.port = "";
+  }
+
+  const nextParams = [...url.searchParams.entries()]
+    .filter(([key, value]) => value.trim() && !TRACKING_PARAMS.has(key.toLowerCase()))
+    .sort(([left], [right]) => left.localeCompare(right));
+
+  url.search = "";
+  for (const [key, value] of nextParams) {
+    url.searchParams.append(key, value);
+  }
+
+  if (url.pathname !== "/") {
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+  }
+
+  return url;
+}
+
 export function normalizeUrl(input: string) {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -7,7 +47,7 @@ export function normalizeUrl(input: string) {
   }
 
   const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  const url = new URL(withProtocol);
+  const url = canonicalizeUrl(new URL(withProtocol));
 
   if (!["http:", "https:"].includes(url.protocol)) {
     throw new Error("Only http and https URLs are supported.");

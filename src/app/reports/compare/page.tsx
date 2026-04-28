@@ -88,8 +88,8 @@ export default async function ComparePage({
     );
   }
 
-  const left = await getSavedReportById(owner, leftId);
-  const right = await getSavedReportById(owner, rightId);
+  const left = await getSavedReportById(owner, leftId, { scope: "all" });
+  const right = await getSavedReportById(owner, rightId, { scope: "all" });
 
   if (!left || !right) {
     return (

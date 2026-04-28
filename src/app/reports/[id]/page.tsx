@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getOwnerContext } from "@/lib/auth/session";
-import { getSavedReportById, listSavedReports } from "@/lib/analysis/saved-reports";
+import { getSavedReportById, listRunsForPage } from "@/lib/analysis/saved-reports";
 import { toneProfiles } from "@/lib/analysis/profiles/toneProfiles";
 
 function scoreTone(score: number) {
@@ -20,29 +20,29 @@ function scoreBarTone(score: number) {
 export default async function SavedReportPage({ params }: { params: Promise<{ id: string }> }) {
   const owner = await getOwnerContext();
   const { id } = await params;
-  const saved = await getSavedReportById(owner, id);
+  const saved = await getSavedReportById(owner, id, { scope: "all" });
 
   if (!saved) notFound();
 
   const result = saved.report;
   const profile = toneProfiles[result.outputTone];
   const buckets = result.structuredAnalysis.buckets;
-  const relatedReports = (await listSavedReports(owner, { domain: saved.domain }))
-    .filter((report) => report.analyzedUrl === saved.analyzedUrl && report.id !== saved.id)
-    .slice(0, 4);
+  const relatedReports = (await listRunsForPage(owner, saved.pageId, { scope: "all" }))
+    .filter((report) => report.id !== saved.id)
+    .slice(0, 6);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-6 py-12 text-zinc-50">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">Saved report</p>
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">Review run</p>
             <h1 className="mt-3 text-3xl font-semibold text-white">{result.domain}</h1>
             <p className="mt-2 text-sm text-zinc-400">{result.analyzedUrl}</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <Link href="/reports" className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
-              All saved reports
+              All pages
             </Link>
             {saved.compareHintPreviousId ? (
               <Link
@@ -69,7 +69,7 @@ export default async function SavedReportPage({ params }: { params: Promise<{ id
                 <h2 className="mt-3 text-2xl font-semibold text-white">{result.domain}</h2>
                 <p className="mt-2 text-sm text-zinc-500">{result.analyzedUrl}</p>
                 <p className="mt-2 text-xs text-zinc-600">
-                  Saved {new Date(saved.updatedAt).toLocaleString("de-DE")} • {profile.label} • version {result.analysisVersion}
+                  Run {new Date(saved.updatedAt).toLocaleString("de-DE")} • {profile.label} • version {result.analysisVersion}
                 </p>
               </div>
               <div className="px-6 py-5">
@@ -100,7 +100,7 @@ export default async function SavedReportPage({ params }: { params: Promise<{ id
             {relatedReports.length ? (
               <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
                 <h3 className="text-lg font-semibold text-white">Timeline</h3>
-                <p className="mt-2 text-sm text-zinc-400">Earlier and nearby snapshots for this exact page, so you can review and compare key iterations.</p>
+                <p className="mt-2 text-sm text-zinc-400">Other runs for this same normalized page. Open them directly or compare snapshots side by side.</p>
                 <div className="mt-4 grid gap-3">
                   {relatedReports.map((report) => (
                     <div key={report.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-3">

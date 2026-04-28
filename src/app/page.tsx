@@ -173,6 +173,32 @@ export default function Home() {
     }
   }
 
+  async function saveReportRecord(nextReport: AuditResult, nextProjectName?: string) {
+    const response = await fetch("/api/reports/save", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        report: nextReport,
+        projectName: nextProjectName?.trim() || undefined,
+      }),
+    });
+
+    const payload = (await response.json()) as { report?: SavedReportSummary; error?: string };
+
+    if (!response.ok || !payload.report) {
+      throw new Error(payload.error ?? "Could not save report.");
+    }
+
+    setSavedReportId(payload.report.id);
+    if (payload.report.projectName) {
+      setProjectName(payload.report.projectName);
+    }
+
+    return payload.report;
+  }
+
   async function runAnalysis(nextUrl: string, nextOutputTone: OutputTone) {
     setIsLoading(true);
     setError(null);
@@ -200,6 +226,13 @@ export default function Home() {
       setUrl(nextUrl.trim());
       setOutputTone(nextOutputTone);
       setSavedReportId(null);
+
+      try {
+        await saveReportRecord(payload.result, projectName);
+      } catch (saveError) {
+        const saveMessage = saveError instanceof Error ? saveError.message : "Could not save report.";
+        setError(saveMessage);
+      }
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : "Analysis failed.";
       setError(message);
@@ -296,27 +329,7 @@ export default function Home() {
     setIsSaving(true);
 
     try {
-      const response = await fetch("/api/reports/save", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          report: result,
-          projectName: projectName.trim() || undefined,
-        }),
-      });
-
-      const payload = (await response.json()) as { report?: SavedReportSummary; error?: string };
-
-      if (!response.ok || !payload.report) {
-        throw new Error(payload.error ?? "Could not save report.");
-      }
-
-      setSavedReportId(payload.report.id);
-      if (payload.report.projectName) {
-        setProjectName(payload.report.projectName);
-      }
+      await saveReportRecord(result, projectName);
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : "Could not save report.";
       setError(message);
@@ -423,9 +436,9 @@ export default function Home() {
                 </ul>
               </div>
               <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 text-sm text-zinc-400 backdrop-blur-sm">
-                <p className="font-medium text-zinc-200">Saved reports</p>
+                <p className="font-medium text-zinc-200">Automatic run history</p>
                 <p className="mt-2 leading-6">
-                  Save analyses, reopen them later, and keep a clean history of how each page evolves over time.
+                  Every review creates a new run automatically, so repeated checks of the same page build a clean timeline with compare points.
                 </p>
               </div>
               <button
@@ -615,7 +628,7 @@ export default function Home() {
                     ))}
                   </datalist>
                   <p className="text-xs leading-5 text-zinc-500">
-                    Use a project to keep related URLs, saved reports, and compare flows together.
+                    Use a project to keep related URLs, page histories, and compare flows together.
                   </p>
                 </div>
                 <div className="mt-5 flex flex-wrap gap-3">
@@ -625,7 +638,7 @@ export default function Home() {
                     disabled={!result || isSaving || Boolean(savedReportId)}
                     className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    {savedReportId ? "Saved" : isSaving ? "Saving..." : "Save report"}
+                    {savedReportId ? "Run saved" : isSaving ? "Saving..." : "Save manually"}
                   </button>
                   {savedReportId ? (
                     <Link
