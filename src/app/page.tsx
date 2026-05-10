@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useId, useState } from "react";
+import { FormEvent, useCallback, useEffect, useId, useState } from "react";
 
 import Link from "next/link";
 
@@ -108,7 +108,6 @@ function ScoreCard({ bucket }: { bucket: ScoreBucketResult }) {
 }
 
 const defaultAnalysisProfile = analysisProfiles.neutral;
-const availableTones = Object.values(toneProfiles);
 const defaultOutputProfile = toneProfiles.audit;
 
 export default function Home() {
@@ -116,8 +115,6 @@ export default function Home() {
   const [result, setResult] = useState<AuditResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [outputTone, setOutputTone] = useState<OutputTone>(defaultOutputProfile.key);
-  const [recentReports, setRecentReports] = useState<SavedReportSummary[]>([]);
   const [savedReportId, setSavedReportId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [projectName, setProjectName] = useState(() => {
@@ -131,31 +128,6 @@ export default function Home() {
     if (typeof window === "undefined") return "/";
     return `${window.location.pathname}${window.location.search}` || "/";
   });
-
-  async function handleGitHubLogin() {
-    setError(null);
-
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const { data, error: authError } = await supabase.auth.signInWithOAuth({
-        provider: "github",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}`,
-        },
-      });
-
-      if (authError) {
-        throw authError;
-      }
-
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (caughtError) {
-      const message = caughtError instanceof Error ? caughtError.message : "Could not start GitHub login.";
-      setError(message);
-    }
-  }
 
   async function handleLogout() {
     setError(null);
@@ -199,54 +171,56 @@ export default function Home() {
     return payload.report;
   }
 
-  async function runAnalysis(nextUrl: string, nextOutputTone: OutputTone) {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch("/api/analyze", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          url: nextUrl.trim(),
-          mode: "neutral",
-          outputTone: nextOutputTone,
-        }),
-      });
-
-      const payload = (await response.json()) as { result?: AuditResult; error?: string };
-
-      if (!response.ok || !payload.result) {
-        throw new Error(payload.error ?? "Analysis failed.");
-      }
-
-      setResult(payload.result);
-      setUrl(nextUrl.trim());
-      setOutputTone(nextOutputTone);
-      setSavedReportId(null);
+  const runAnalysis = useCallback(
+    async (nextUrl: string, nextOutputTone: OutputTone) => {
+      setIsLoading(true);
+      setError(null);
 
       try {
-        await saveReportRecord(payload.result, projectName);
-      } catch (saveError) {
-        const saveMessage = saveError instanceof Error ? saveError.message : "Could not save report.";
-        setError(saveMessage);
+        const response = await fetch("/api/analyze", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            url: nextUrl.trim(),
+            mode: "neutral",
+            outputTone: nextOutputTone,
+          }),
+        });
+
+        const payload = (await response.json()) as { result?: AuditResult; error?: string };
+
+        if (!response.ok || !payload.result) {
+          throw new Error(payload.error ?? "Analysis failed.");
+        }
+
+        setResult(payload.result);
+        setUrl(nextUrl.trim());
+        setSavedReportId(null);
+
+        try {
+          await saveReportRecord(payload.result, projectName);
+        } catch (saveError) {
+          const saveMessage = saveError instanceof Error ? saveError.message : "Could not save report.";
+          setError(saveMessage);
+        }
+      } catch (caughtError) {
+        const message = caughtError instanceof Error ? caughtError.message : "Analysis failed.";
+        setError(message);
+        setResult(null);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (caughtError) {
-      const message = caughtError instanceof Error ? caughtError.message : "Analysis failed.";
-      setError(message);
-      setResult(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }
+    },
+    [projectName],
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!url.trim() || isLoading) return;
 
-    await runAnalysis(url, outputTone);
+    await runAnalysis(url, defaultOutputProfile.key);
   }
 
   useEffect(() => {
@@ -264,7 +238,7 @@ export default function Home() {
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [result, isLoading]);
+  }, [result, isLoading, runAnalysis]);
 
   useEffect(() => {
     let cancelled = false;
@@ -284,23 +258,12 @@ export default function Home() {
       }
     }
 
-    async function loadRecentReports() {
-      try {
-        const response = await fetch("/api/reports?limit=6");
-        const payload = (await response.json()) as { reports?: SavedReportSummary[] };
-        if (!response.ok || !payload.reports || cancelled) return;
-        setRecentReports(payload.reports);
-      } catch {
-        if (!cancelled) setRecentReports([]);
-      }
-    }
-
-    void Promise.all([loadSession(), loadRecentReports()]);
+    void loadSession();
 
     return () => {
       cancelled = true;
     };
-  }, [savedReportId]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -340,63 +303,74 @@ export default function Home() {
 
   const buckets = result?.structuredAnalysis.buckets ?? [];
   const scores = result?.structuredAnalysis.scores;
-  const selectedOutputProfile = toneProfiles[outputTone];
-  const resultOutputProfile = result ? toneProfiles[result.outputTone] : selectedOutputProfile;
+  const resultOutputProfile = result ? toneProfiles[result.outputTone] : defaultOutputProfile;
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-6 py-12 text-zinc-50">
-      <div className="mx-auto flex max-w-6xl flex-col gap-16">
-        <header className="flex items-center justify-between gap-4">
-          <div>
+    <main
+      aria-busy={isLoading}
+      className="min-h-screen overflow-x-clip bg-[radial-gradient(circle_at_top,#1a1a1a_0%,#0a0a0a_45%,#050505_100%)] px-4 py-6 pb-[calc(env(safe-area-inset-bottom)+2rem)] text-zinc-50 sm:px-6 sm:py-10 sm:pb-[calc(env(safe-area-inset-bottom)+2.5rem)] lg:px-8 lg:py-12 lg:pb-[calc(env(safe-area-inset-bottom)+3rem)]"
+    >
+      <div className="mx-auto flex max-w-6xl flex-col gap-10 sm:gap-12 lg:gap-16">
+        <header className="flex flex-col gap-4 sm:gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl">
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">Landingpage Roaster</p>
             <p className="mt-2 text-sm text-zinc-400">Analyze once, then explain it for the right person.</p>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <div className={`inline-flex items-center rounded-full border px-4 py-2 text-sm ${session?.isAuthenticated ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-zinc-700 text-zinc-300"}`}>
-              {session?.isAuthenticated ? `Signed in as ${session.displayName}` : "Guest mode"}
-            </div>
-            <a
-              href="#analyze"
-              className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
-            >
-              Go analyze
-            </a>
-            <Link
-              href="/projects"
-              className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
-            >
-              Projects
-            </Link>
-            <Link
-              href="/reports"
-              className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
-            >
-              Saved reports
-            </Link>
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-start lg:justify-end">
+            {session?.isAuthenticated ? (
+              <>
+                <div className="inline-flex w-full items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300 sm:w-auto">
+                  Signed in as {session.displayName}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  className="w-full rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900 sm:w-auto"
+                >
+                  Log out
+                </button>
+              </>
+            ) : githubAuth?.available ? (
+              <Link
+                href={`/login?next=${encodeURIComponent(returnTo)}`}
+                className="inline-flex w-full items-center justify-center rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900 sm:w-auto"
+              >
+                Login
+              </Link>
+            ) : (
+              <div className="inline-flex w-full items-center justify-center rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-300 sm:w-auto">
+                Guest mode
+              </div>
+            )}
           </div>
         </header>
 
-        <section className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+        <section className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:gap-12">
           <div className="max-w-3xl">
             <div className="mb-6 inline-flex rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
               {defaultAnalysisProfile.badge}
             </div>
-            <h1 className="text-5xl font-semibold tracking-tight text-white sm:text-6xl">
+            <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-balance text-white sm:text-5xl lg:text-6xl">
               Get a real landing page analysis, then shape it for the person reading it.
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300">{defaultAnalysisProfile.description}</p>
-            <div className="mt-8 flex flex-wrap gap-3 text-sm text-zinc-300">
+            <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-300 sm:mt-6 sm:text-lg sm:leading-8">
+              {defaultAnalysisProfile.description}
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2.5 text-sm text-zinc-300 sm:mt-8 sm:gap-3">
               <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">{defaultAnalysisProfile.label}</span>
               <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">Criteria-based scoring</span>
-              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">Audience-specific output modes</span>
+              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1">Try first, login later</span>
             </div>
           </div>
 
-          <div id="analyze" className="rounded-3xl border border-zinc-800/80 bg-zinc-900/70 p-6 shadow-2xl shadow-black/30 backdrop-blur-sm">
+          <div
+            id="analyze"
+            className="rounded-[1.75rem] border border-zinc-800/80 bg-zinc-900/70 p-5 shadow-2xl shadow-black/30 backdrop-blur-sm sm:rounded-3xl sm:p-6"
+          >
             <div className="mb-6">
               <p className="text-sm font-medium text-zinc-200">Analyze a page</p>
               <p className="mt-2 text-sm leading-6 text-zinc-400">
-                The app extracts page signals, scores explicit criteria, and then explains the result differently for newbies, developers, or audit-style reviews.
+                Paste a URL, let the app inspect the page, and get a clear landing-page review with actionable fixes.
               </p>
             </div>
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -409,44 +383,14 @@ export default function Home() {
                 value={url}
                 onChange={(event) => setUrl(event.target.value)}
                 placeholder="https://your-site.com"
-                className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-4 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-emerald-400"
+                className="w-full rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-4 text-base text-white outline-none transition placeholder:text-zinc-500 focus:border-emerald-400"
               />
-              <label className="text-sm text-zinc-300" htmlFor="tone">
-                Report mode
-              </label>
-              <select
-                id="tone"
-                value={outputTone}
-                onChange={(event) => setOutputTone(event.target.value as OutputTone)}
-                className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-4 text-base text-white outline-none transition focus:border-emerald-400"
-              >
-                {availableTones.map((tone) => (
-                  <option key={tone.key} value={tone.key}>
-                    {tone.selectorLabel}
-                  </option>
-                ))}
-              </select>
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 text-sm text-zinc-400 backdrop-blur-sm">
-                <p className="font-medium text-zinc-200">{selectedOutputProfile.label}</p>
-                <p className="mt-2 leading-6">{selectedOutputProfile.description}</p>
-                <ul className="mt-3 space-y-2 text-xs leading-5 text-zinc-500">
-                  {selectedOutputProfile.emphasisPoints.map((point) => (
-                    <li key={point}>• {point}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 text-sm text-zinc-400 backdrop-blur-sm">
-                <p className="font-medium text-zinc-200">Automatic run history</p>
-                <p className="mt-2 leading-6">
-                  Every review creates a new run automatically, so repeated checks of the same page build a clean timeline with compare points.
-                </p>
-              </div>
               <button
                 type="submit"
                 disabled={isLoading}
-                className="rounded-2xl bg-emerald-400 px-5 py-4 text-base font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-70"
+                className="w-full rounded-2xl bg-emerald-400 px-5 py-4 text-base font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isLoading ? "Analyzing..." : "Go analyze"}
+                {isLoading ? "Analyzing..." : "Analyze"}
               </button>
             </form>
             <div className="mt-6 rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 text-sm text-zinc-400 backdrop-blur-sm">
@@ -460,27 +404,10 @@ export default function Home() {
                     {session?.isAuthenticated
                       ? `Signed in as ${session.displayName}. Reports and projects belong to your account.`
                       : githubAuth?.available
-                        ? "Guest mode is active. Analyze freely first, then connect GitHub when you want to keep reports and projects across sessions."
+                        ? "Guest mode is active. Analyze freely first, then connect GitHub later when you want to keep reports and projects across sessions."
                         : "Guest mode is active. Analyze freely first. Cross-session ownership is not configured in this deployment yet."}
                   </p>
                 </div>
-                {!session?.isAuthenticated && githubAuth?.available ? (
-                  <button
-                    type="button"
-                    onClick={() => void handleGitHubLogin()}
-                    className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
-                  >
-                    Continue with GitHub
-                  </button>
-                ) : session?.isAuthenticated ? (
-                  <button
-                    type="button"
-                    onClick={() => void handleLogout()}
-                    className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
-                  >
-                    Log out
-                  </button>
-                ) : null}
               </div>
               {!githubAuth?.available && githubAuth?.reason ? <p className="mt-3 text-xs text-amber-300">{githubAuth.reason}</p> : null}
             </div>
@@ -488,57 +415,19 @@ export default function Home() {
           </div>
         </section>
 
-        {recentReports.length ? (
-          <section className="grid gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">Saved reports</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Recent history</h2>
-              </div>
-              <Link href="/reports" className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900">
-                View all
-              </Link>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {recentReports.map((report) => (
-                <Link
-                  key={report.id}
-                  href={`/reports/${report.id}`}
-                  className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.16)] transition hover:border-zinc-700 hover:bg-zinc-950/85"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-base font-semibold text-white">{report.domain}</h3>
-                    <span className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-400">
-                      {toneProfiles[report.outputTone].label}
-                    </span>
-                  </div>
-                  <p className="mt-2 line-clamp-2 text-sm text-zinc-400">{report.analyzedUrl}</p>
-                  <p className="mt-3 text-xs text-zinc-500">{new Date(report.updatedAt).toLocaleString("de-DE")}</p>
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-zinc-400">
-                    <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Clarity {report.scores.clarity}</span>
-                    <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">CTA {report.scores.cta}</span>
-                    <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">Trust {report.scores.trust}</span>
-                    <span className="rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">SEO {report.scores.seo}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
         {result ? (
-          <section className="grid gap-6 rounded-[2rem] border border-zinc-800/80 bg-zinc-900/55 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm lg:grid-cols-[0.9fr_1.1fr]">
+          <section className="grid gap-5 rounded-[1.75rem] border border-zinc-800/80 bg-zinc-900/55 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-sm sm:gap-6 sm:rounded-[2rem] sm:p-6 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="space-y-4">
               <div className="overflow-hidden rounded-3xl border border-zinc-800/80 bg-zinc-950/75 shadow-[0_10px_30px_rgba(0,0,0,0.2)] backdrop-blur-sm">
-                <div className="border-b border-zinc-800/80 bg-gradient-to-br from-zinc-900 via-zinc-900/95 to-zinc-950 px-6 py-5">
+                <div className="border-b border-zinc-800/80 bg-gradient-to-br from-zinc-900 via-zinc-900/95 to-zinc-950 px-4 py-5 sm:px-6">
                   <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">{resultOutputProfile.verdictLabel}</p>
-                  <h2 className="mt-3 text-2xl font-semibold text-white">{result.domain}</h2>
-                  <p className="mt-2 text-sm text-zinc-500">{result.analyzedUrl}</p>
-                  <p className="mt-2 text-xs text-zinc-600">
+                  <h2 className="mt-3 break-words text-xl font-semibold text-white sm:text-2xl">{result.domain}</h2>
+                  <p className="mt-2 break-all text-sm text-zinc-500">{result.analyzedUrl}</p>
+                  <p className="mt-2 text-xs leading-5 text-zinc-600">
                     Version {result.analysisVersion} • hash {result.contentHash.slice(0, 12)} • {result.reportSource === "cache" ? "loaded from cache" : "fresh analysis"}
                   </p>
                 </div>
-                <div className="px-6 py-5">
+                <div className="px-4 py-5 sm:px-6">
                   <p className="text-sm leading-7 text-zinc-300">{result.structuredAnalysis.verdict}</p>
                   <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-4 backdrop-blur-sm">
                     <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">{resultOutputProfile.summaryLabel}</p>
@@ -555,7 +444,7 @@ export default function Home() {
                 </div>
               ) : null}
 
-              <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
+              <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm sm:p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h3 className="text-lg font-semibold text-white">{resultOutputProfile.signalsLabel}</h3>
@@ -574,7 +463,7 @@ export default function Home() {
 
             <div className="grid gap-4">
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
+                <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm sm:p-6">
                   <h3 className="text-lg font-semibold text-white">{resultOutputProfile.problemsLabel}</h3>
                   <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
                     {result.structuredAnalysis.problems.map((problem) => (
@@ -584,7 +473,7 @@ export default function Home() {
                     ))}
                   </ul>
                 </div>
-                <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
+                <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm sm:p-6">
                   <h3 className="text-lg font-semibold text-white">{resultOutputProfile.fixesLabel}</h3>
                   <ol className="mt-4 space-y-3 text-sm leading-6 text-zinc-300">
                     {result.structuredAnalysis.fixes.map((fix, index) => (
@@ -597,7 +486,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
+              <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm sm:p-6">
                 <h3 className="text-lg font-semibold text-white">Saved report</h3>
                 <p className="mt-3 text-sm leading-6 text-zinc-400">
                   Save this analysis so you can reopen it later, keep a history of changes, and compare important iterations side by side.
@@ -631,19 +520,19 @@ export default function Home() {
                     Use a project to keep related URLs, page histories, and compare flows together.
                   </p>
                 </div>
-                <div className="mt-5 flex flex-wrap gap-3">
+                <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                   <button
                     type="button"
                     onClick={handleSaveReport}
                     disabled={!result || isSaving || Boolean(savedReportId)}
-                    className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-70"
+                    className="w-full rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                   >
                     {savedReportId ? "Run saved" : isSaving ? "Saving..." : "Save manually"}
                   </button>
                   {savedReportId ? (
                     <Link
                       href={`/reports/${savedReportId}`}
-                      className="inline-flex rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
+                      className="inline-flex w-full items-center justify-center rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900 sm:w-auto"
                     >
                       Open saved report
                     </Link>
@@ -651,7 +540,7 @@ export default function Home() {
                   {savedReportId && projectName ? (
                     <Link
                       href="/projects"
-                      className="inline-flex rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
+                      className="inline-flex w-full items-center justify-center rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900 sm:w-auto"
                     >
                       Open projects
                     </Link>
@@ -659,20 +548,20 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
+              <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm sm:p-6">
                 <h3 className="text-lg font-semibold text-white">Detailed scoring breakdown</h3>
                 <p className="mt-3 text-sm leading-6 text-zinc-400">
                   Open the full bucket-by-bucket and criterion-by-criterion breakdown when you want the detailed scoring view.
                 </p>
                 <Link
                   href={`/breakdown?url=${encodeURIComponent(result.analyzedUrl)}&tone=${result.outputTone}&mode=${result.mode}`}
-                  className="mt-5 inline-flex rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
+                  className="mt-5 inline-flex w-full items-center justify-center rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900 sm:w-auto"
                 >
                   View scoring breakdown
                 </Link>
               </div>
 
-              <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-6 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm">
+              <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/70 p-5 shadow-[0_10px_30px_rgba(0,0,0,0.16)] backdrop-blur-sm sm:p-6">
                 <h3 className="text-lg font-semibold text-white">{resultOutputProfile.rewriteLabel}</h3>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-4 backdrop-blur-sm">
@@ -689,6 +578,23 @@ export default function Home() {
           </section>
         ) : null}
       </div>
+
+      {isLoading ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 px-6 backdrop-blur-sm">
+          <div
+            role="status"
+            aria-live="polite"
+            className="w-full max-w-md rounded-3xl border border-zinc-800/80 bg-zinc-950/95 p-8 text-center shadow-2xl shadow-black/40"
+          >
+            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-zinc-700 border-t-emerald-400" />
+            <h2 className="mt-6 text-2xl font-semibold text-white">Analyzing your page…</h2>
+            <p className="mt-3 text-sm leading-6 text-zinc-300">
+              This can take a little while depending on the page size and extraction steps.
+            </p>
+            <p className="mt-2 text-xs text-zinc-500">Please wait while we finish the review.</p>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
